@@ -1,0 +1,18 @@
+# ubuntu 25.04 with openssh-server installed
+
+# Build image for arm64 with:
+#   docker build -t sshd-plucky-arm64 -f images/Dockerfile.sshd-plucky --platform linux/arm64 .
+# Build image for amd64 with:
+#   docker build -t sshd-plucky-amd64 -f images/Dockerfile.sshd-plucky --platform linux/amd64 .
+
+FROM ubuntu:25.04
+
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server && \
+    mkdir /var/run/sshd || true && \
+    echo 'root:bread' | chpasswd && \
+    echo "PermitRootLogin yes" >> /etc/ssh/sshd_config && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+EXPOSE 22
+CMD ["/usr/sbin/sshd", "-D"]

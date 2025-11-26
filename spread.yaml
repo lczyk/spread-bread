@@ -1,0 +1,29 @@
+project: bread
+
+path: /bread
+
+# environment:
+#   PROJECT_PATH: /chisel-releases
+#   SHARED_LIBRARIES: $PROJECT_PATH/tests/spread/lib
+#   PATH: /snap/bin:$PATH:$SHARED_LIBRARIES
+#   CHISEL_HACKS: "1"
+
+# exclude:
+#   - .github
+
+backends:
+  docker:
+    type: adhoc
+    allocate: source scripts/spread_allocate.sh
+    discard: source scripts/spread_discard.sh
+    systems:
+      - plucky-amd64:
+          password: bread
+          workers: 2
+      - plucky-arm64:
+          password: bread
+          workers: 2
+
+suites:
+  tests/spread/:
+    summary: Bread tests
