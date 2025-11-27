@@ -8,14 +8,14 @@ path: /bread
 #   PATH: /snap/bin:$PATH:$SHARED_LIBRARIES
 #   CHISEL_HACKS: "1"
 
-# exclude:
-#   - .github
+exclude:
+  - .github
 
 backends:
-  docker:
+  custom-docker:
     type: adhoc
-    allocate: source scripts/spread_allocate.sh
-    discard: source scripts/spread_discard.sh
+    allocate: source tests/scripts/spread_allocate.sh
+    discard: source tests/scripts/spread_discard.sh
     systems:
       - plucky-amd64:
           password: bread
