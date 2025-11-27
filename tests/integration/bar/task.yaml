@@ -1,0 +1,2 @@
+summary: bar
+execute: hello "bar"

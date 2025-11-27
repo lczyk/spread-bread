@@ -1,0 +1,2 @@
+summary: qux
+execute: hello "qux"

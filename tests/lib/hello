@@ -1,0 +1,5 @@
+#!/bin/bash -ex
+
+WHO=${1:-World}
+
+echo "Hello, $WHO!"

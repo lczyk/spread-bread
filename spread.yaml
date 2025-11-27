@@ -2,11 +2,10 @@ project: bread
 
 path: /bread
 
-# environment:
-#   PROJECT_PATH: /chisel-releases
-#   SHARED_LIBRARIES: $PROJECT_PATH/tests/spread/lib
-#   PATH: /snap/bin:$PATH:$SHARED_LIBRARIES
-#   CHISEL_HACKS: "1"
+environment:
+  PROJECT_PATH: /bread
+  SHARED_LIBRARIES: $PROJECT_PATH/tests/lib
+  PATH: $PATH:$SHARED_LIBRARIES
 
 exclude:
   - .github
@@ -23,7 +22,15 @@ backends:
       - plucky-arm64:
           password: bread
           workers: 2
+      - noble-arm64:
+          password: bread
+          workers: 2
+      - noble-amd64:
+          password: bread
+          workers: 2
 
 suites:
-  tests/spread/:
-    summary: Bread tests
+  tests/unit/:
+    summary: Bread unit tests
+  tests/integration/:
+    summary: Bread integration tests

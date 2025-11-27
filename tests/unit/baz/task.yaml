@@ -1,0 +1,2 @@
+summary: baz
+execute: hello "baz"
