@@ -18,16 +18,16 @@ backends:
     systems:
       - plucky-amd64:
           password: bread
-          workers: 2
+          # workers: 2
       - plucky-arm64:
           password: bread
-          workers: 2
+          # workers: 2
       - noble-arm64:
           password: bread
-          workers: 2
+          # workers: 2
       - noble-amd64:
           password: bread
-          workers: 2
+          # workers: 2
 
 suites:
   tests/unit/:
