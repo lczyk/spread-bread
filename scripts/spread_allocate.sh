@@ -8,12 +8,22 @@ echo "flavour: $flavour"
 echo "arch: $arch"
 
 # precompiled docker images for amd64 and arm64
-image="sshd-$flavour-$arch"
+image="bread-sshd-$flavour-$arch"
 echo "image: $image"
 
-# Add random suffix to container name for uniqueness
-random_suffix=$(head /dev/urandom | tr -dc a-f0-9 | head -c8)
-container_name="${SPREAD_SYSTEM}-${random_suffix}"
+# Use a counter file to ensure unique container names
+# snippet thanks to @lengau
+# https://github.com/canonical/charmcraft/blob/120a00a50f7ed3d0ae2fc2bea69e2e43b68b1594/spread.yaml#L72-L79
+sleep 0.$RANDOM  # Minimize chances of a race condition
+export counter_file=".spread-worker-num"
+instance_num=$(
+    flock -x $counter_file bash -c '
+    [ -s $counter_file ] || echo 0 > $counter_file
+    num=$(< $counter_file) && echo $num
+    echo $(( $num + 1 )) > $counter_file'
+)
+
+container_name="bread-${SPREAD_SYSTEM}-${instance_num}"
 echo "container_name: $container_name"
 
 docker run \

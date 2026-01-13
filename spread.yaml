@@ -13,21 +13,21 @@ exclude:
 backends:
   custom-docker:
     type: adhoc
-    allocate: source tests/scripts/spread_allocate.sh
-    discard: source tests/scripts/spread_discard.sh
+    allocate: source scripts/spread_allocate.sh
+    discard: source scripts/spread_discard.sh
     systems:
       - plucky-amd64:
           password: bread
-          # workers: 2
+          workers: 2
       - plucky-arm64:
           password: bread
-          # workers: 2
+          workers: 2
       - noble-arm64:
           password: bread
-          # workers: 2
+          workers: 2
       - noble-amd64:
           password: bread
-          # workers: 2
+          workers: 2
 
 suites:
   tests/unit/:
