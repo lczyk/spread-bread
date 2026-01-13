@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  spread:
+    name: spread
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker
+        uses: docker/setup-docker-action@v4
+
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '>=1.17.0'
+
+      - name: Build spread
+        run: |
+          git clone \
+            --depth 1 \
+            --branch master \
+            https://github.com/canonical/spread \
+            _spread
+          (cd _spread && mkdir -p bin && go build -o bin/spread ./cmd/spread)
+          ln -s $GITHUB_WORKSPACE/_spread/bin/spread $GITHUB_WORKSPACE/spread
+
+      - name: Build images
+        run: |
+          make build-images
+
+      - name: Run spread tests
+        run: |
+          ./spread -list
+          ./spread
+          
