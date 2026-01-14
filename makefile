@@ -6,7 +6,8 @@ list:
 	@spread -list
 
 .PHONY: run
-run: build-images
+run:
+	if [ -z "$(SKIP_IMAGE_BUILD)" ]; then $(MAKE) build-images; else echo "SKIP_IMAGE_BUILD=1, reusing prebuilt backend images"; fi
 	@spread
 
 .PHONY: build-images
