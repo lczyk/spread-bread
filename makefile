@@ -1,6 +1,6 @@
 .SUFFIXES:
 
-.DEFAULT_GOAL := run
+.DEFAULT_GOAL := help
 
 help:  ## Show this help
 	@echo "Available targets:"
