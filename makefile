@@ -14,8 +14,16 @@ list:  ## List all discovered spread tasks
 run: build-images  ## Run spread (default)
 	@spread
 
+SSHD_IMAGES := bread-sshd-plucky-arm64 bread-sshd-plucky-amd64 bread-sshd-noble-arm64 bread-sshd-noble-amd64
+
 .PHONY: build-images
 build-images:  ## Build the sshd docker images (plucky + noble, arm64 + amd64)
+	@missing=0; \
+	for img in $(SSHD_IMAGES); do \
+		[ -z "$$(docker images -q $$img 2>/dev/null)" ] && missing=1 && break; \
+	done; \
+	[ $$missing -eq 0 ] && echo "all images already built" && exit 0; \
+	:
 	docker build -t bread-sshd-plucky-arm64 -f images/Dockerfile.sshd-plucky --platform linux/arm64 .
 	docker build -t bread-sshd-plucky-amd64 -f images/Dockerfile.sshd-plucky --platform linux/amd64 .
 	docker build -t bread-sshd-noble-arm64 -f images/Dockerfile.sshd-noble --platform linux/arm64 .
