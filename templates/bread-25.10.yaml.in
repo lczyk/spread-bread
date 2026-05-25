@@ -17,10 +17,10 @@ backends:
     allocate: source scripts/spread_allocate_bread.sh
     discard: source scripts/spread_discard_bread.sh
     systems:
-      - 25.10-amd64:
+      - ubuntu-25.10-amd64:
           password: bread
           workers: 2
-      - 25.10-arm64:
+      - ubuntu-25.10-arm64:
           password: bread
           workers: 2
 

@@ -2,8 +2,8 @@
 
 set -e
 
-ver=$(echo "$SPREAD_SYSTEM" | cut -d- -f1)   # e.g., 24.04-amd64 -> 24.04
-arch=$(echo "$SPREAD_SYSTEM" | cut -d- -f2)  # e.g., 24.04-amd64 -> amd64
+ver=$(echo "$SPREAD_SYSTEM" | cut -d- -f2)   # e.g., ubuntu-24.04-amd64 -> 24.04
+arch=$(echo "$SPREAD_SYSTEM" | cut -d- -f3)  # e.g., ubuntu-24.04-amd64 -> amd64
 echo "ver: $ver"
 echo "arch: $arch"
 
