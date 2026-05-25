@@ -57,7 +57,7 @@ spread-bread/
     build_binaries.sh            # cross-compile chisel + spread, fetch docker static, in one ubuntu/go builder
     build_image.sh               # per-image build w/ hash-stamp short-circuit
     hash_inputs.sh               # per-image input hash (drives stamp invalidation)
-    inline_scripts.py            # splice scripts/*.sh into yaml templates
+    inline_scripts.rb            # splice scripts/*.sh into yaml templates
   scripts/                       # allocate / discard scripts, one pair per flavour
   images/                        # one Dockerfile per (flavour, ubuntu version)
   templates/                     # yaml templates with `source scripts/...` markers

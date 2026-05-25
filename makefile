@@ -1,7 +1,6 @@
 .SUFFIXES:
 .DEFAULT_GOAL := help
 
-PYTHON ?= python3
 DOCKER ?= docker
 
 # Cross-compiled go binaries baked into bread-chisel-releases + bread-test.
@@ -109,9 +108,9 @@ BINARIES_ENV := CHISEL_REF="$(CHISEL_REF)" SPREAD_REF="$(SPREAD_REF)" GO_BUILDER
 .stamp/bread-test-%: .stamp/bread-% .stamp/binaries FORCE | .stamp
 	@hack/build_image.sh bread-test-$*
 
-inlined/%.yaml: templates/%.yaml.in hack/inline_scripts.py $(SCRIPTS)
+inlined/%.yaml: templates/%.yaml.in hack/inline_scripts.rb $(SCRIPTS)
 	@mkdir -p inlined
-	$(PYTHON) hack/inline_scripts.py $< $@
+	ruby hack/inline_scripts.rb $< $@
 
 # Host-arch detection for `make shell` (uname -m -> docker arch name).
 HOST_ARCH  := $(shell uname -m | sed -e 's/^x86_64$$/amd64/' -e 's/^aarch64$$/arm64/')
