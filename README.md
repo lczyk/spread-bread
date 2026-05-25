@@ -7,7 +7,7 @@
 
 because it rhymes 🤷🏻‍♀️
 
-non-trivial example project + image host for Canonical [`spread`](https://github.com/canonical/spread) testing framework, using prebuilt docker images as the backend.
+prebuilt docker images + ready-to-use spread yamls so you can drop Canonical [`spread`](https://github.com/canonical/spread) into any project without writing a backend or maintaining test infra. images live on ghcr as multiarch manifests; per-version yamls live as github release assets.
 
 here is this project's pet bread:
 
@@ -27,43 +27,61 @@ here is this project's pet bread:
 
 ## flavours
 
-two image flavours, each for ubuntu 24.04, 25.10, 26.04 x amd64/arm64:
+two image flavours, each for ubuntu 24.04, 25.10, 26.04 x amd64 / arm64, published as multiarch tags at `ghcr.io/lczyk/spread-bread/<flavour>:<ver>`:
 
-- **`bread`** -- base image: ubuntu + sshd. general-purpose spread system; the test suite installs whatever else it needs.
-- **`bread-chisel-releases`** -- built on top of bread, adds `chisel` + the shell + container tooling typically needed by [chisel-releases](https://github.com/canonical/chisel-releases) spread tests (curl, wget, git, jq, file, sudo, tree, docker.io, skopeo).
+- **`bread`** -- base: ubuntu + sshd. general-purpose spread system; the test suite installs whatever else it needs.
+- **`bread-chisel-releases`** -- bread + `chisel` + the shell + container tooling typically needed by [chisel-releases](https://github.com/canonical/chisel-releases) spread tests (curl, wget, git, jq, file, sudo, tree, docker, skopeo). `chisel` and `docker` are built from source (canonical/chisel pinned by SHA, docker fetched from docker.com static) so the bundled binaries are go 1.25+ and survive qemu emulation.
 
-## layout
+## using (the common case)
+
+drop a ready-made spread yaml into your project. no clone, no build. yamls are attached to the rolling [`yamls`](https://github.com/lczyk/spread-bread/releases/latest) release:
+
+```
+curl -fsSL https://github.com/lczyk/spread-bread/releases/latest/download/bread-chisel-releases-26.04.yaml -o spread.yaml
+spread
+```
+
+allocate inside the yaml `docker run`s the matching multiarch ghcr image; `--platform linux/<arch>` picks the right arch from the manifest list. first run pulls the image; subsequent runs hit the local docker cache.
+
+available yamls in the release:
+
+- `bread-{24.04,25.10,26.04}.yaml`
+- `bread-chisel-releases-{24.04,25.10,26.04}.yaml`
+
+## layout (for contributors)
 
 ```
 spread-bread/
-  makefile                       # build images + generate inlined yamls
+  makefile                       # build images + generate inlined yamls + run contract tests
   hack/
+    build_binaries.sh            # cross-compile chisel + spread, fetch docker static, in one ubuntu/go builder
     build_image.sh               # per-image build w/ hash-stamp short-circuit
     hash_inputs.sh               # per-image input hash (drives stamp invalidation)
     inline_scripts.py            # splice scripts/*.sh into yaml templates
-  scripts/                       # allocate/discard scripts, one pair per flavour
+  scripts/                       # allocate / discard scripts, one pair per flavour
   images/                        # one Dockerfile per (flavour, ubuntu version)
   templates/                     # yaml templates with `source scripts/...` markers
-  inlined/                       # generated self-contained spread yamls (distribution artefacts)
-  demo/                          # worked example consuming the bread images
+  inlined/                       # generated self-contained spread yamls (release artefacts)
+  cache/binaries/                # gitignored; cross-compiled chisel / spread / docker per arch
+  demo/                          # worked example with local builds + a small test suite
     spread.yaml                  # hand-maintained inlined yaml, LTS-only (24.04 + 26.04, both arches)
     makefile
     tests/{unit,integration,lib}/
+  tests/                         # spread-in-spread contract tests against the inlined yamls
+    spread.yaml                  # outer spread (uses the bread-test image as its system)
+    Dockerfile.bread-test-26.04  # test-host image: bread:26.04 + docker + spread (not published)
+    contract-{bread,bread-chisel-releases}/run/task.yaml
+    _inner-{bread,bread-chisel-releases}/contract/task.yaml
+  .github/workflows/             # ci (build + test) on PR / push to main; release on r* tag
 ```
 
-## using
+## using (contributor / dev)
 
 default goal is `help`:
 
 ```
 make           # list targets
 make all       # build all images + generate inlined yamls
-```
-
-build all images locally:
-
-```
-make build-all
 ```
 
 narrow the matrix via `VER` / `ARCH`:
@@ -74,19 +92,32 @@ make build-bread VER=24.04 ARCH=amd64
 make build-bread-chisel-releases ARCH=arm64
 ```
 
-generate distribution yamls (already committed under `inlined/`, but regenerate after script edits):
+regenerate distribution yamls (already committed under `inlined/`, but regenerate after script edits):
 
 ```
 make inlined-yaml-files
 ```
 
-run the demo (LTS systems only -- 24.04 + 26.04 x amd64/arm64). builds the required `bread` images first if missing:
+run the demo (LTS systems only -- 24.04 + 26.04 x amd64 / arm64). builds the required `bread` images first if missing:
 
 ```
 make demo
 ```
 
-## ghcr
+run the spread-in-spread contract tests against the locally-built images (same as ci):
 
-images will eventually be published to `ghcr.io/lczyk/spread-bread/{bread,bread-chisel-releases}:<ver>` as multiarch manifests. not yet wired up.
+```
+cd tests && spread
+```
 
+the outer spreads a `bread-test` container; that container runs an inner spread against each inlined yaml; the inner asserts the contract (ubuntu version + arch match the system name, plus `chisel --version` + tool presence for the chisel flavour).
+
+## publishing
+
+`release.yaml` triggers on push of an `r[0-9]+` tag. on success it:
+
+- builds the binary cache + all images on per-arch native runners.
+- pushes 6 multiarch manifests to `ghcr.io/lczyk/spread-bread/{bread,bread-chisel-releases}:<ver>`.
+- attaches `inlined/*.yaml` to a rolling github release called `yamls`. older `r*` releases are deleted (release objects only; the underlying tags stay).
+
+ci (`ci.yaml`) is build + test on every PR + push to main; no publish.
