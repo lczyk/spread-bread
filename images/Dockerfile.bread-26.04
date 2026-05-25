@@ -7,7 +7,19 @@ RUN apt-get update && \
     mkdir /var/run/sshd || true && \
     echo 'root:bread' | chpasswd && \
     echo "PermitRootLogin yes" >> /etc/ssh/sshd_config && \
+    echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Replace /etc/pam.d/sshd with a pam_permit-only stack. These images are
+# throwaway test containers; we don't care about password validity, and the
+# default pam_unix stack pulls in unix_chkpwd which can fail to load
+# libcrypt.so.1 inside privileged containers on some hosts.
+RUN printf '%s\n' \
+    'auth     required pam_permit.so' \
+    'account  required pam_permit.so' \
+    'session  required pam_permit.so' \
+    'password required pam_permit.so' \
+    > /etc/pam.d/sshd
 
 EXPOSE 22
 CMD ["/usr/sbin/sshd", "-D"]
