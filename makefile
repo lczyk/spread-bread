@@ -4,6 +4,15 @@
 PYTHON ?= python3
 DOCKER ?= docker
 
+# Cross-compiled go binaries baked into bread-chisel-releases + bread-test.
+# Pinned to specific upstream commits for reproducibility.
+CHISEL_REF := 5fb43b8f3e7ec3fcc854f3c84a4668a5cefd9848
+SPREAD_REF := 9fdce848027b944a50d25ed2271f17c213b44bd5
+GO_BUILDER_IMAGE := ubuntu/go:1.25-26.04_edge
+# Docker CLI fetched from docker.com static; ubuntu apt's docker.io is built
+# with go 1.24 and crashes under qemu emulation, so we ship upstream's static.
+DOCKER_VERSION := 29.5.2
+
 # Full matrix.
 VERSIONS := 24.04 25.10 26.04
 ARCHES   := amd64 arm64
@@ -69,18 +78,35 @@ inlined-yaml-files: $(INLINED)  ## Generate inlined/*.yaml from templates/*.yaml
 .PHONY: FORCE
 FORCE:
 
-.PRECIOUS: .stamp/bread-% .stamp/bread-chisel-releases-% .stamp/bread-test-%
+.PRECIOUS: .stamp/bread-% .stamp/bread-chisel-releases-% .stamp/bread-test-% .stamp/binaries
 
 .stamp:
 	@mkdir -p $@
 
+# Cross-compile chisel + spread for both arches via a single
+# Canonical ubuntu/go:1.25-26.04_edge builder container. Stamp content =
+# hash of inputs (CHISEL_REF + SPREAD_REF + builder image + script).
+BINARIES_ENV := CHISEL_REF="$(CHISEL_REF)" SPREAD_REF="$(SPREAD_REF)" GO_BUILDER_IMAGE="$(GO_BUILDER_IMAGE)" DOCKER_VERSION="$(DOCKER_VERSION)"
+
+.stamp/binaries: FORCE | .stamp
+	@set -e ; \
+		new=$$($(BINARIES_ENV) hack/hash_inputs.sh binaries) ; \
+		cur=$$(cat $@ 2>/dev/null || true) ; \
+		if [ "$$new" != "$$cur" ]; then \
+			echo "==> building go binaries (chisel + spread + docker, both arches)" ; \
+			$(BINARIES_ENV) hack/build_binaries.sh ; \
+			echo "$$new" > $@ ; \
+		else \
+			echo "==> go binaries up-to-date (stamp matches)" ; \
+		fi
+
 .stamp/bread-%: FORCE | .stamp
 	@hack/build_image.sh bread-$*
 
-.stamp/bread-chisel-releases-%: .stamp/bread-% FORCE | .stamp
+.stamp/bread-chisel-releases-%: .stamp/bread-% .stamp/binaries FORCE | .stamp
 	@hack/build_image.sh bread-chisel-releases-$*
 
-.stamp/bread-test-%: .stamp/bread-% FORCE | .stamp
+.stamp/bread-test-%: .stamp/bread-% .stamp/binaries FORCE | .stamp
 	@hack/build_image.sh bread-test-$*
 
 inlined/%.yaml: templates/%.yaml.in hack/inline_scripts.py $(SCRIPTS)
@@ -88,12 +114,13 @@ inlined/%.yaml: templates/%.yaml.in hack/inline_scripts.py $(SCRIPTS)
 	$(PYTHON) hack/inline_scripts.py $< $@
 
 .PHONY: clean
-clean:  ## Remove built images, stamps, generated inlined yamls
+clean:  ## Remove built images, stamps, generated inlined yamls, cached binaries
 	-@$(foreach va,$(FULL_VER_ARCH), \
 		$(DOCKER) rmi -f bread:$(va) bread-chisel-releases:$(va) 2>/dev/null ; )
 	-@$(foreach a,$(ARCHES), \
 		$(DOCKER) rmi -f bread-test:26.04-$(a) 2>/dev/null ; )
 	rm -rf .stamp
+	rm -rf cache
 	rm -f $(INLINED)
 
 .PHONY: clean-stamps

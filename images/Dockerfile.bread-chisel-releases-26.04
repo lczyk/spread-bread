@@ -1,18 +1,21 @@
 # Bread-chisel-releases image: bread + chisel + tooling commonly
 # expected by chisel-releases spread tests.
+#
+# chisel is built from source (see hack/build_binaries.sh) and dropped
+# into ./cache/binaries/chisel-<arch> by the binaries stamp rule before
+# this image is built.
 
 ARG BASE_TAG=26.04-amd64
+ARG BUILD_ARCH=amd64
 FROM bread:${BASE_TAG}
-
-ARG CHISEL_VERSION=v1.4.1
+ARG BUILD_ARCH
 
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
         curl wget git jq file sudo tree \
-        docker.io skopeo && \
+        skopeo && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-RUN arch=$(dpkg --print-architecture) && \
-    curl -fsSL "https://github.com/canonical/chisel/releases/download/${CHISEL_VERSION}/chisel_${CHISEL_VERSION}_linux_${arch}.tar.gz" | \
-    tar -xz -C /usr/local/bin chisel && \
-    chmod +x /usr/local/bin/chisel
+COPY cache/binaries/chisel-${BUILD_ARCH} /usr/local/bin/chisel
+COPY cache/binaries/docker-${BUILD_ARCH}  /usr/local/bin/docker
+RUN chmod +x /usr/local/bin/chisel /usr/local/bin/docker

@@ -1,29 +1,12 @@
-# Test-host image: bread:26.04 + docker.io + spread (built from source).
-# Used as the outer system in the spread-in-spread test flow.
+# Test-host image: bread:26.04 + docker.io + spread (cross-compiled in
+# the binaries cache; see hack/build_binaries.sh). Used as the outer
+# system in the spread-in-spread test flow.
 
 ARG BASE_TAG=26.04-amd64
-
-# Stage 1: build spread from source. CGO disabled so we get a static binary
-# that drops cleanly into the much smaller final stage.
-FROM docker.io/library/golang:1-bookworm AS spread-builder
-
-ARG SPREAD_REF=master
-
-RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y git && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
-
-RUN git clone --depth 1 --branch "${SPREAD_REF}" \
-    https://github.com/canonical/spread /src/spread
-
-WORKDIR /src/spread
-RUN CGO_ENABLED=0 go build -o /out/spread ./cmd/spread
-
-# Stage 2: final test-host image.
+ARG BUILD_ARCH=amd64
 FROM bread:${BASE_TAG}
+ARG BUILD_ARCH
 
-RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
-
-COPY --from=spread-builder /out/spread /usr/local/bin/spread
+COPY cache/binaries/spread-${BUILD_ARCH} /usr/local/bin/spread
+COPY cache/binaries/docker-${BUILD_ARCH} /usr/local/bin/docker
+RUN chmod +x /usr/local/bin/spread /usr/local/bin/docker

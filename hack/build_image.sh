@@ -38,6 +38,7 @@ case "$flavour" in
         docker build \
             --tag "bread-chisel-releases:$ver-$arch" \
             --build-arg "BASE_TAG=$ver-$arch" \
+            --build-arg "BUILD_ARCH=$arch" \
             --file "images/Dockerfile.bread-chisel-releases-$ver" \
             --platform "linux/$arch" \
             .
@@ -46,6 +47,7 @@ case "$flavour" in
         docker build \
             --tag "bread-test:$ver-$arch" \
             --build-arg "BASE_TAG=$ver-$arch" \
+            --build-arg "BUILD_ARCH=$arch" \
             --file "tests/Dockerfile.bread-test-$ver" \
             --platform "linux/$arch" \
             .
