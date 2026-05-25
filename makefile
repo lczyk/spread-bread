@@ -24,6 +24,9 @@ FULL_VER_ARCH := $(foreach v,$(VERSIONS),$(foreach a,$(ARCHES),$(v)-$(a)))
 BREAD_STAMPS  := $(addprefix .stamp/bread-,$(SELECTED_VER_ARCH))
 CHISEL_STAMPS := $(addprefix .stamp/bread-chisel-releases-,$(SELECTED_VER_ARCH))
 
+# The test-host image only exists at 26.04 x both arches.
+BREAD_TEST_STAMPS := $(addprefix .stamp/bread-test-26.04-,$(ARCHES))
+
 TEMPLATES := $(wildcard templates/*.yaml.in)
 INLINED   := $(patsubst templates/%.yaml.in,inlined/%.yaml,$(TEMPLATES))
 
@@ -46,6 +49,9 @@ build-bread: $(BREAD_STAMPS)  ## Build bread images (narrow via VER=... ARCH=...
 .PHONY: build-bread-chisel-releases
 build-bread-chisel-releases: $(CHISEL_STAMPS)  ## Build bread-chisel-releases images (narrow via VER=... ARCH=...)
 
+.PHONY: build-bread-test
+build-bread-test: $(BREAD_TEST_STAMPS)  ## Build the bread-test (26.04 only, both arches) test-host image
+
 # Demo runs only on LTS versions (24.04, 26.04) x both arches, regardless of VER/ARCH narrowing.
 DEMO_STAMPS := $(foreach a,$(ARCHES),.stamp/bread-24.04-$(a) .stamp/bread-26.04-$(a))
 
@@ -63,7 +69,7 @@ inlined-yaml-files: $(INLINED)  ## Generate inlined/*.yaml from templates/*.yaml
 .PHONY: FORCE
 FORCE:
 
-.PRECIOUS: .stamp/bread-% .stamp/bread-chisel-releases-%
+.PRECIOUS: .stamp/bread-% .stamp/bread-chisel-releases-% .stamp/bread-test-%
 
 .stamp:
 	@mkdir -p $@
@@ -74,6 +80,9 @@ FORCE:
 .stamp/bread-chisel-releases-%: .stamp/bread-% FORCE | .stamp
 	@hack/build_image.sh bread-chisel-releases-$*
 
+.stamp/bread-test-%: .stamp/bread-% FORCE | .stamp
+	@hack/build_image.sh bread-test-$*
+
 inlined/%.yaml: templates/%.yaml.in hack/inline_scripts.py $(SCRIPTS)
 	@mkdir -p inlined
 	$(PYTHON) hack/inline_scripts.py $< $@
@@ -82,6 +91,8 @@ inlined/%.yaml: templates/%.yaml.in hack/inline_scripts.py $(SCRIPTS)
 clean:  ## Remove built images, stamps, generated inlined yamls
 	-@$(foreach va,$(FULL_VER_ARCH), \
 		$(DOCKER) rmi -f bread:$(va) bread-chisel-releases:$(va) 2>/dev/null ; )
+	-@$(foreach a,$(ARCHES), \
+		$(DOCKER) rmi -f bread-test:26.04-$(a) 2>/dev/null ; )
 	rm -rf .stamp
 	rm -f $(INLINED)
 

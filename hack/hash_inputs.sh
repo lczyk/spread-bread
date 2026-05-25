@@ -25,6 +25,12 @@ case "$flavour" in
             ".stamp/bread-$ver-$arch"
         )
         ;;
+    bread-test)
+        inputs=(
+            "tests/Dockerfile.bread-test-$ver"
+            ".stamp/bread-$ver-$arch"
+        )
+        ;;
     *)
         echo "unknown flavour: $flavour" >&2
         exit 2

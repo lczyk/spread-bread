@@ -42,6 +42,14 @@ case "$flavour" in
             --platform "linux/$arch" \
             .
         ;;
+    bread-test)
+        docker build \
+            --tag "bread-test:$ver-$arch" \
+            --build-arg "BASE_TAG=$ver-$arch" \
+            --file "tests/Dockerfile.bread-test-$ver" \
+            --platform "linux/$arch" \
+            .
+        ;;
     *)
         echo "unknown flavour: $flavour" >&2
         exit 2
