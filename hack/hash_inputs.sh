@@ -35,7 +35,10 @@ flavour="${rest%-*}"
 
 case "$flavour" in
     bread)
-        inputs=("images/Dockerfile.bread-$ver")
+        inputs=(
+            "images/Dockerfile.bread-$ver"
+            "hack/bread-warning.sh"
+        )
         ;;
     bread-chisel-releases)
         inputs=(
