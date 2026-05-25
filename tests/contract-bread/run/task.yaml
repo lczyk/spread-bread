@@ -17,6 +17,11 @@ execute: |
   cp "$INLINED" "$work/spread.yaml"
   cp -r "$REPO/tests/_inner-bread/." "$work/tests"
 
+  # Inlined yaml references ghcr multiarch path (consumer form).
+  # For tests we want locally-built arch-suffixed images, not a ghcr
+  # pull. Rewrite the image line back to bare local form.
+  sed -i 's#ghcr\.io/lczyk/spread-bread/\([a-z-]*\):\$ver#\1:$ver-$arch#g' "$work/spread.yaml"
+
   cd "$work"
 
   # Inlined yaml lists both arches; filter inner spread to the outer's

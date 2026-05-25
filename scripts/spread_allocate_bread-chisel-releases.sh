@@ -7,7 +7,7 @@ arch=$(echo "$SPREAD_SYSTEM" | cut -d- -f3)  # e.g., ubuntu-24.04-amd64 -> amd64
 echo "ver: $ver"
 echo "arch: $arch"
 
-image="bread-chisel-releases:$ver-$arch"
+image="ghcr.io/lczyk/spread-bread/bread-chisel-releases:$ver"
 echo "image: $image"
 
 sleep 0.$RANDOM  # Minimize chances of a race condition

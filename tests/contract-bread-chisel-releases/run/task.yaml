@@ -13,6 +13,10 @@ execute: |
 
   cp "$INLINED" "$work/spread.yaml"
 
+  # Inlined yaml references ghcr multiarch path; rewrite back to local
+  # arch-suffixed form for tests.
+  sed -i 's#ghcr\.io/lczyk/spread-bread/\([a-z-]*\):\$ver#\1:$ver-$arch#g' "$work/spread.yaml"
+
   # The bread-chisel-releases template's suites: block points at
   # tests/spread/integration/ (chisel-releases convention). Mirror that.
   mkdir -p "$work/tests/spread/integration"

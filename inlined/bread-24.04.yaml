@@ -24,7 +24,7 @@ backends:
       echo "ver: $ver"
       echo "arch: $arch"
 
-      image="bread:$ver-$arch"
+      image="ghcr.io/lczyk/spread-bread/bread:$ver"
       echo "image: $image"
 
       # Use a counter file to ensure unique container names.
