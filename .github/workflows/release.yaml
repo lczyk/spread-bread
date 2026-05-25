@@ -47,7 +47,7 @@ jobs:
       - name: Regenerate inlined yamls
         run: make inlined-yaml-files
 
-      - name: Delete prior r* releases (keep only this one)
+      - name: Delete prior r* release objects (keep their git tags)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KEEP: ${{ github.ref_name }}
@@ -57,8 +57,8 @@ jobs:
             grep -E '^r[0-9]+$' | \
             while read -r t; do
               if [ "$t" != "$KEEP" ]; then
-                echo "Deleting prior release: $t"
-                gh release delete "$t" --yes --cleanup-tag || true
+                echo "Deleting prior release object: $t (tag preserved)"
+                gh release delete "$t" --yes || true
               fi
             done
 
