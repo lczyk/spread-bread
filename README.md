@@ -35,7 +35,7 @@ two image flavours, each for ubuntu 24.04, 25.10, 26.04 x amd64 / arm64, publish
 
 ## using (the common case)
 
-drop a ready-made spread yaml into your project. no clone, no build. yamls are attached to the rolling [`yamls`](https://github.com/lczyk/spread-bread/releases/latest) release:
+drop a ready-made spread yaml into your project. no clone, no build. yamls are attached to the rolling [`downloads`](https://github.com/lczyk/spread-bread/releases/latest) release:
 
 ```
 curl -fsSL https://github.com/lczyk/spread-bread/releases/latest/download/bread-chisel-releases-26.04.yaml -o spread.yaml
@@ -48,6 +48,33 @@ available yamls in the release:
 
 - `bread-{24.04,25.10,26.04}.yaml`
 - `bread-chisel-releases-{24.04,25.10,26.04}.yaml`
+
+## install spread
+
+prefer a precompiled spread CLI over `go install`? same release ships statically-linked binaries for linux amd64 / arm64:
+
+```
+curl -fsSL https://github.com/lczyk/spread-bread/releases/latest/download/spread-linux-amd64 -o /usr/local/bin/spread
+chmod +x /usr/local/bin/spread
+```
+
+verify the checksum:
+
+```
+curl -fsSL https://github.com/lczyk/spread-bread/releases/latest/download/spread-linux-amd64.sha256 | sha256sum -c -
+```
+
+verify the cosign signature (keyless OIDC, no account):
+
+```
+curl -fsSL https://github.com/lczyk/spread-bread/releases/latest/download/spread-linux-amd64.cosign.bundle -o spread.cosign.bundle
+cosign verify-blob --bundle spread.cosign.bundle \
+    --certificate-identity-regexp '^https://github\.com/lczyk/spread-bread/' \
+    --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+    /usr/local/bin/spread
+```
+
+the cert-identity regex above is approximate; consult the actual issued cert on the first signed release if `cosign verify-blob` rejects it.
 
 ## layout (for contributors)
 

@@ -3,10 +3,12 @@ run-name: Release ${{ github.ref_name }}
 
 # Build + test + publish on push of a revision tag (r1, r2, ...).
 # Rolling: every rev tag triggers a new release. Only the latest GitHub
-# release survives -- it is always named "yamls" and carries the
-# inlined/*.yaml distribution artefacts. ghcr image tags are versioned
-# per-flavour (ghcr.io/<repo>/{bread,bread-chisel-releases}:<ver>) and
-# stay around as overwrite-on-push tags.
+# release survives -- it is always named "downloads" and carries the
+# inlined/*.yaml distribution artefacts + precompiled spread binaries
+# (with sha256 sidecars and cosign keyless signature bundles).
+# ghcr image tags are versioned per-flavour
+# (ghcr.io/<repo>/{bread,bread-chisel-releases}:<ver>) and stay around
+# as overwrite-on-push tags.
 
 on:
   push:
@@ -35,11 +37,12 @@ jobs:
       id-token: write
 
   publish-release:
-    needs: build-oci
+    needs: [binaries, build-oci]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write
+      id-token: write
 
     steps:
       - name: Checkout repository
@@ -48,7 +51,45 @@ jobs:
       - name: Regenerate inlined yamls
         run: make inlined-yaml-files
 
-      - name: Delete prior r* release objects (keep their git tags)
+      - name: Restore cached binaries
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: binaries-cache
+          path: .
+
+      - name: Assemble release assets
+        run: |
+          set -e
+          mkdir -p release-out
+
+          # inlined yamls verbatim
+          cp inlined/*.yaml release-out/
+
+          # spread binaries: rename to canonical go-release-style names
+          cp cache/binaries/spread-amd64 release-out/spread-linux-amd64
+          cp cache/binaries/spread-arm64 release-out/spread-linux-arm64
+          chmod +x release-out/spread-linux-*
+
+          # sha256 sidecars (standard sha256sum format)
+          cd release-out
+          for f in spread-linux-*; do
+            sha256sum -b "$f" > "$f.sha256"
+          done
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Cosign keyless sign binaries (produce .cosign.bundle sidecars)
+        run: |
+          set -e
+          cd release-out
+          for f in spread-linux-amd64 spread-linux-arm64; do
+            cosign sign-blob --yes \
+              --bundle "$f.cosign.bundle" \
+              "$f"
+          done
+
+      - name: Delete prior r* release objects (keep their refs)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KEEP: ${{ github.ref_name }}
@@ -58,28 +99,43 @@ jobs:
             grep -E '^r[0-9]+$' | \
             while read -r t; do
               if [ "$t" != "$KEEP" ]; then
-                echo "Deleting prior release object: $t (tag preserved)"
+                echo "Deleting prior release object: $t (ref preserved)"
                 gh release delete "$t" --yes || true
               fi
             done
 
-      - name: Create release "yamls" w/ inlined yamls attached
+      - name: Create release "downloads" w/ yamls + spread binaries attached
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           tag_name: ${{ github.ref_name }}
-          name: yamls
-          files: inlined/*.yaml
+          name: downloads
+          files: release-out/*
           make_latest: true
           fail_on_unmatched_files: true
           body: |
-            self-contained spread yamls for the bread + bread-chisel-releases
-            ghcr images. each yaml inlines the allocate / discard glue and
-            points at the matching ghcr multiarch image
-            (ghcr.io/lczyk/spread-bread/<flavour>:<ver>).
+            rolling distribution release for the spread-bread project.
 
+            **inlined spread yamls** -- self-contained spread configs for the
+            bread + bread-chisel-releases ghcr images. each yaml has the
+            allocate / discard glue inlined and points at the matching ghcr
+            multiarch image (ghcr.io/lczyk/spread-bread/<flavour>:<ver>).
             drop one into your project as `spread.yaml`:
 
             ```
             curl -fsSL https://github.com/lczyk/spread-bread/releases/latest/download/bread-chisel-releases-26.04.yaml -o spread.yaml
             spread
             ```
+
+            **precompiled spread binaries** -- statically-linked spread CLI
+            for linux amd64 / arm64, cross-compiled with go 1.25.x. each
+            binary ships with a `.sha256` checksum sidecar and a
+            `.cosign.bundle` keyless signature bundle.
+
+            ```
+            curl -fsSL https://github.com/lczyk/spread-bread/releases/latest/download/spread-linux-amd64 -o /usr/local/bin/spread
+            chmod +x /usr/local/bin/spread
+            ```
+
+            **ghcr image tags** stay around indefinitely under their
+            per-version tag (`ghcr.io/lczyk/spread-bread/<flavour>:<ver>`)
+            and are signed via cosign keyless OIDC at publish time.
