@@ -20,7 +20,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
+      # Cache the cross-compiled binaries between runs, keyed on every
+      # input that affects the build: the build script + the makefile
+      # (which holds the version pins CHISEL_REF / SPREAD_REF /
+      # DOCKER_VERSION / GO_BUILDER_IMAGE). Hit -> skip the make step.
+      # Miss -> make rebuilds and the cache auto-saves at job end.
+      - name: Restore binaries cache
+        id: binaries-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            cache/binaries/
+            .stamp/binaries
+          key: binaries-${{ hashFiles('hack/build_binaries.sh', 'makefile') }}
+
       - name: Build go binaries (chisel + spread + docker static)
+        if: steps.binaries-cache.outputs.cache-hit != 'true'
         run: make .stamp/binaries
 
       - name: Upload cache/binaries + .stamp/binaries
