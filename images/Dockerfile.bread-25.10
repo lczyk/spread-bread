@@ -1,9 +1,9 @@
-# Lean bread image: Ubuntu 25.10 + sshd only.
+# Bread image: Ubuntu 25.10 + sshd + docker.io.
 
 FROM docker.io/library/ubuntu:25.10
 
 RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server docker.io && \
     mkdir /var/run/sshd || true && \
     echo 'root:bread' | chpasswd && \
     echo "PermitRootLogin yes" >> /etc/ssh/sshd_config && \

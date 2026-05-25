@@ -24,8 +24,8 @@ here is this project's pet bread:
 
 two image flavours, each for ubuntu 24.04, 25.10, 26.04 x amd64/arm64:
 
-- **`bread`** -- lean: ubuntu + sshd + docker.io. for general-purpose spread testing where the test suite installs whatever else it needs (docker.io is in the base so a bread container can host nested docker workloads).
-- **`chisel-releases-bread`** -- built on top of lean bread, adds `chisel` + the shell tooling typically needed by [chisel-releases](https://github.com/canonical/chisel-releases) spread tests (curl, wget, git, jq, file, sudo, tree, skopeo).
+- **`bread`** -- base image: ubuntu + sshd + docker.io. general-purpose spread system; the test suite installs whatever else it needs. docker.io is in the base so a bread container can host nested docker workloads.
+- **`chisel-releases-bread`** -- built on top of bread, adds `chisel` + the shell tooling typically needed by [chisel-releases](https://github.com/canonical/chisel-releases) spread tests (curl, wget, git, jq, file, sudo, tree, skopeo).
 
 ## layout
 
@@ -40,7 +40,7 @@ spread-bread/
   images/                        # one Dockerfile per (flavour, ubuntu version)
   templates/                     # yaml templates with `source scripts/...` markers
   inlined/                       # generated self-contained spread yamls (distribution artefacts)
-  demo/                          # worked example consuming the lean bread images
+  demo/                          # worked example consuming the bread images
     spread.yaml                  # hand-maintained inlined yaml, LTS-only (24.04 + 26.04, both arches)
     makefile
     tests/{unit,integration,lib}/

@@ -1,4 +1,4 @@
-# Chisel-releases-bread image: lean bread + chisel + tooling commonly
+# Chisel-releases-bread image: bread + chisel + tooling commonly
 # expected by chisel-releases spread tests.
 
 ARG BASE_TAG=25.10-amd64
@@ -9,7 +9,7 @@ ARG CHISEL_VERSION=v1.4.1
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
         curl wget git jq file sudo tree \
-        docker.io skopeo && \
+        skopeo && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN arch=$(dpkg --print-architecture) && \

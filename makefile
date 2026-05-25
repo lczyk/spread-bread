@@ -41,7 +41,7 @@ all: build-all inlined-yaml-files  ## Build all images + generate inlined yamls
 build-all: build-bread build-chisel-releases-bread  ## Build all images (narrow via VER=... ARCH=...)
 
 .PHONY: build-bread
-build-bread: $(BREAD_STAMPS)  ## Build lean bread images (narrow via VER=... ARCH=...)
+build-bread: $(BREAD_STAMPS)  ## Build bread images (narrow via VER=... ARCH=...)
 
 .PHONY: build-chisel-releases-bread
 build-chisel-releases-bread: $(CHISEL_STAMPS)  ## Build chisel-releases-bread images (narrow via VER=... ARCH=...)
