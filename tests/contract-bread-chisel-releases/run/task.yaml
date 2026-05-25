@@ -1,0 +1,26 @@
+summary: run inner spread against an inlined bread-chisel-releases yaml
+
+variants:
+  - v24_04
+  - v25_10
+  - v26_04
+
+execute: |
+  set -e
+
+  work=$(mktemp -d)
+  trap "rm -rf $work" EXIT
+
+  cp "$INLINED" "$work/spread.yaml"
+
+  # The bread-chisel-releases template's suites: block points at
+  # tests/spread/integration/ (chisel-releases convention). Mirror that.
+  mkdir -p "$work/tests/spread/integration"
+  cp -r "$REPO/tests/_inner-bread-chisel-releases/." "$work/tests/spread/integration"
+
+  cd "$work"
+
+  # Filter inner spread to outer's arch -- ci per-arch jobs only build
+  # one arch's images. Locally w/ make all, both arches are present.
+  outer_arch=$(echo "$SPREAD_SYSTEM" | cut -d- -f3)
+  spread -v "docker:ubuntu-...-${outer_arch}:..."

@@ -1,0 +1,27 @@
+summary: bread image contract (ubuntu version + arch match the system name)
+
+execute: |
+  set -e
+
+  expected_ver=$(echo "$SPREAD_SYSTEM" | cut -d- -f2)
+  expected_arch=$(echo "$SPREAD_SYSTEM" | cut -d- -f3)
+
+  # /etc/os-release VERSION_ID matches expected ubuntu version.
+  actual_ver=$(. /etc/os-release && echo "$VERSION_ID")
+  if [ "$expected_ver" != "$actual_ver" ]; then
+      echo "ver mismatch: expected=$expected_ver got=$actual_ver"
+      exit 1
+  fi
+
+  # uname -m matches expected arch (translated to docker arch names).
+  case "$(uname -m)" in
+      x86_64)  actual_arch=amd64 ;;
+      aarch64) actual_arch=arm64 ;;
+      *)       actual_arch=$(uname -m) ;;
+  esac
+  if [ "$expected_arch" != "$actual_arch" ]; then
+      echo "arch mismatch: expected=$expected_arch got=$actual_arch"
+      exit 1
+  fi
+
+  echo "ok: $SPREAD_SYSTEM"

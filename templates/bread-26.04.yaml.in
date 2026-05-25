@@ -1,0 +1,29 @@
+project: bread
+
+path: /bread
+
+environment:
+  PROJECT_PATH: /bread
+  SHARED_LIBRARIES: $PROJECT_PATH/tests/lib
+  PATH: $PATH:$SHARED_LIBRARIES
+
+exclude:
+  - .git
+  - .github
+
+backends:
+  docker:
+    type: adhoc
+    allocate: source scripts/spread_allocate_bread.sh
+    discard: source scripts/spread_discard_bread.sh
+    systems:
+      - ubuntu-26.04-amd64:
+          password: bread
+          workers: 2
+      - ubuntu-26.04-arm64:
+          password: bread
+          workers: 2
+
+suites:
+  tests/:
+    summary: Replace with your own suites

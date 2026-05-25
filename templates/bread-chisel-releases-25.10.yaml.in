@@ -1,0 +1,33 @@
+project: chisel-releases
+
+path: /chisel-releases
+
+environment:
+  PROJECT_PATH: /chisel-releases
+  SHARED_LIBRARIES: $PROJECT_PATH/tests/spread/lib
+  PATH: /snap/bin:$PATH:$SHARED_LIBRARIES
+  CHISEL_HACKS: "1"
+
+exclude:
+  - .git
+  - .github
+  - .vscode
+  - work
+  - rootfs
+
+backends:
+  docker:
+    type: adhoc
+    allocate: source scripts/spread_allocate_bread-chisel-releases.sh
+    discard: source scripts/spread_discard_bread-chisel-releases.sh
+    systems:
+      - ubuntu-25.10-amd64:
+          password: bread
+          workers: 4
+      - ubuntu-25.10-arm64:
+          password: bread
+          workers: 4
+
+suites:
+  tests/spread/integration/:
+    summary: Tests common scenarios
