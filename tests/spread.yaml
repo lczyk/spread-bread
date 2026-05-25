@@ -88,10 +88,10 @@ backends:
     systems:
       - ubuntu-26.04-amd64:
           password: bread
-          workers: 1
+          workers: 2
       - ubuntu-26.04-arm64:
           password: bread
-          workers: 1
+          workers: 2
 
 suites:
   contract-bread/:
