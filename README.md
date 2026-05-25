@@ -24,8 +24,8 @@ here is this project's pet bread:
 
 two image flavours, each for ubuntu 24.04, 25.10, 26.04 x amd64/arm64:
 
-- **`bread`** -- base image: ubuntu + sshd + docker.io. general-purpose spread system; the test suite installs whatever else it needs. docker.io is in the base so a bread container can host nested docker workloads.
-- **`bread-chisel-releases`** -- built on top of bread, adds `chisel` + the shell tooling typically needed by [chisel-releases](https://github.com/canonical/chisel-releases) spread tests (curl, wget, git, jq, file, sudo, tree, skopeo).
+- **`bread`** -- base image: ubuntu + sshd. general-purpose spread system; the test suite installs whatever else it needs.
+- **`bread-chisel-releases`** -- built on top of bread, adds `chisel` + the shell + container tooling typically needed by [chisel-releases](https://github.com/canonical/chisel-releases) spread tests (curl, wget, git, jq, file, sudo, tree, docker.io, skopeo).
 
 ## layout
 

@@ -1,9 +1,9 @@
-# Bread image: Ubuntu 24.04 + sshd + docker.io.
+# Bread image: Ubuntu 24.04 + sshd only.
 
 FROM docker.io/library/ubuntu:24.04
 
 RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server docker.io && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server && \
     mkdir /var/run/sshd || true && \
     echo 'root:bread' | chpasswd && \
     echo "PermitRootLogin yes" >> /etc/ssh/sshd_config && \
