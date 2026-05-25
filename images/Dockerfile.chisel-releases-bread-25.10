@@ -1,0 +1,18 @@
+# Chisel-releases-bread image: lean bread + chisel + tooling commonly
+# expected by chisel-releases spread tests.
+
+ARG BASE_TAG=25.10-amd64
+FROM bread:${BASE_TAG}
+
+ARG CHISEL_VERSION=v1.4.1
+
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        curl wget git jq file sudo tree \
+        docker.io skopeo && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN arch=$(dpkg --print-architecture) && \
+    curl -fsSL "https://github.com/canonical/chisel/releases/download/${CHISEL_VERSION}/chisel_${CHISEL_VERSION}_linux_${arch}.tar.gz" | \
+    tar -xz -C /usr/local/bin chisel && \
+    chmod +x /usr/local/bin/chisel

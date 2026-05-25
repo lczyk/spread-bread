@@ -1,11 +1,6 @@
-# ubuntu 25.04 with openssh-server installed
+# Lean bread image: Ubuntu 25.10 + sshd only.
 
-# Build image for arm64 with:
-#   docker build -t sshd-plucky-arm64 -f images/Dockerfile.sshd-plucky --platform linux/arm64 .
-# Build image for amd64 with:
-#   docker build -t sshd-plucky-amd64 -f images/Dockerfile.sshd-plucky --platform linux/amd64 .
-
-FROM ubuntu:25.04
+FROM docker.io/library/ubuntu:25.10
 
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server && \

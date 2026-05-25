@@ -35,10 +35,10 @@ jobs:
 
       - name: Build images
         run: |
-          make build-images
+          make build-bread
 
       - name: Run spread tests
         run: |
-          ./spread -list
-          ./spread
-          
+          cd demo
+          ../spread -list
+          ../spread
