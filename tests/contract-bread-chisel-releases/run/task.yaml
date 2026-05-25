@@ -19,4 +19,8 @@ execute: |
   cp -r "$REPO/tests/_inner-bread-chisel-releases/." "$work/tests/spread/integration"
 
   cd "$work"
-  spread -v
+
+  # Filter inner spread to outer's arch -- ci per-arch jobs only build
+  # one arch's images. Locally w/ make all, both arches are present.
+  outer_arch=$(echo "$SPREAD_SYSTEM" | cut -d- -f3)
+  spread -v "docker:ubuntu-...-${outer_arch}:..."

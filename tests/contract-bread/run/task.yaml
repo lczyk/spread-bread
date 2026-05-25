@@ -18,4 +18,9 @@ execute: |
   cp -r "$REPO/tests/_inner-bread/." "$work/tests"
 
   cd "$work"
-  spread -v
+
+  # Inlined yaml lists both arches; filter inner spread to the outer's
+  # arch so per-arch ci jobs (which build only one arch's images) don't
+  # try to spawn the missing-arch inner container.
+  outer_arch=$(echo "$SPREAD_SYSTEM" | cut -d- -f3)
+  spread -v "docker:ubuntu-...-${outer_arch}:..."
