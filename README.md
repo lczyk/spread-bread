@@ -1,5 +1,10 @@
 # spread-bread
 
+[![CI](https://github.com/lczyk/spread-bread/actions/workflows/ci.yaml/badge.svg)](https://github.com/lczyk/spread-bread/actions/workflows/ci.yaml)
+[![yamls](https://img.shields.io/github/v/release/lczyk/spread-bread?label=yamls)](https://github.com/lczyk/spread-bread/releases/latest)
+[![ghcr bread](https://img.shields.io/badge/ghcr-bread-blue?logo=docker)](https://github.com/lczyk/spread-bread/pkgs/container/spread-bread%2Fbread)
+[![ghcr bread-chisel-releases](https://img.shields.io/badge/ghcr-bread--chisel--releases-blue?logo=docker)](https://github.com/lczyk/spread-bread/pkgs/container/spread-bread%2Fbread-chisel-releases)
+
 because it rhymes 🤷🏻‍♀️
 
 non-trivial example project + image host for Canonical [`spread`](https://github.com/canonical/spread) testing framework, using prebuilt docker images as the backend.
