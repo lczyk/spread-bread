@@ -113,6 +113,16 @@ inlined/%.yaml: templates/%.yaml.in hack/inline_scripts.py $(SCRIPTS)
 	@mkdir -p inlined
 	$(PYTHON) hack/inline_scripts.py $< $@
 
+# Host-arch detection for `make shell` (uname -m -> docker arch name).
+HOST_ARCH  := $(shell uname -m | sed -e 's/^x86_64$$/amd64/' -e 's/^aarch64$$/arm64/')
+SHELL_ARCH := $(if $(strip $(ARCH)),$(ARCH),$(HOST_ARCH))
+
+.PHONY: shell
+shell: .stamp/bread-26.04-$(SHELL_ARCH)  ## Drop into a bread:26.04 shell (host arch). Override via ARCH=...
+	$(DOCKER) run --rm -it \
+		--platform "linux/$(SHELL_ARCH)" \
+		bread:26.04-$(SHELL_ARCH) bash
+
 .PHONY: clean
 clean:  ## Remove built images, stamps, generated inlined yamls, cached binaries
 	-@$(foreach va,$(FULL_VER_ARCH), \
