@@ -1,0 +1,45 @@
+name: Build and Test
+
+# Reusable. Per-arch native runner builds all bread / bread-chisel-releases /
+# bread-test images for its arch (no qemu, no cross-arch matrix entry per
+# runner) and then runs spread-in-spread tests scoped to the same arch.
+
+on:
+  workflow_call:
+
+jobs:
+  build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Restore cached binaries + stamp
+        uses: actions/download-artifact@v6
+        with:
+          name: binaries-cache
+          path: .
+
+      - name: Build images for ${{ matrix.arch }}
+        run: make build-bread build-bread-chisel-releases build-bread-test ARCH=${{ matrix.arch }}
+
+      - name: Install spread (host-side, for invoking the outer)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y golang-go
+          go install github.com/canonical/spread/cmd/spread@master
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+
+      - name: Run spread-in-spread tests (${{ matrix.arch }} outer only)
+        working-directory: tests
+        run: spread "outer:ubuntu-26.04-${{ matrix.arch }}"

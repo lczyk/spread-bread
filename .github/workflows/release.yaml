@@ -1,0 +1,65 @@
+name: Release
+run-name: Release ${{ github.ref_name }}
+
+# Build + test + publish on push of a revision tag (r1, r2, ...).
+# Rolling: each new rev tag replaces the previous GitHub release; only
+# the latest release survives. ghcr image tags are versioned and stay.
+
+on:
+  push:
+    tags:
+      - 'r[0-9]*'
+  workflow_dispatch:
+
+jobs:
+  binaries:
+    uses: ./.github/workflows/binaries.yaml
+
+  build-and-test:
+    needs: binaries
+    uses: ./.github/workflows/build-and-test.yaml
+
+  publish-ghcr:
+    needs: [binaries, build-and-test]
+    uses: ./.github/workflows/publish-ghcr.yaml
+    permissions:
+      contents: read
+      packages: write
+
+  publish-release:
+    needs: [binaries, build-and-test]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Regenerate inlined yamls
+        run: make inlined-yaml-files
+
+      - name: Delete prior r* releases (keep only this one)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KEEP: ${{ github.ref_name }}
+        run: |
+          set -e
+          gh release list --json tagName --jq '.[].tagName' | \
+            grep -E '^r[0-9]+$' | \
+            while read -r t; do
+              if [ "$t" != "$KEEP" ]; then
+                echo "Deleting prior release: $t"
+                gh release delete "$t" --yes --cleanup-tag || true
+              fi
+            done
+
+      - name: Create release w/ inlined yamls
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          files: inlined/*.yaml
+          make_latest: true
+          fail_on_unmatched_files: true

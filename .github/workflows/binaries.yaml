@@ -1,0 +1,29 @@
+name: Binaries
+
+# Reusable. Cross-compiles chisel + spread (via Canonical's
+# ubuntu/go:1.25-26.04_edge builder) and fetches the upstream docker
+# static CLI for both arches. Uploads cache/binaries/ + the matching
+# .stamp/binaries so downstream jobs can short-circuit any rebuild.
+
+on:
+  workflow_call:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Build go binaries (chisel + spread + docker static)
+        run: make .stamp/binaries
+
+      - name: Upload cache/binaries + .stamp/binaries
+        uses: actions/upload-artifact@v6
+        with:
+          name: binaries-cache
+          path: |
+            cache/binaries/
+            .stamp/binaries
