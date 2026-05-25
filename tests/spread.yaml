@@ -1,0 +1,111 @@
+project: spread-bread-tests
+
+path: /opt/spread-bread-tests
+
+environment:
+  # Bind-mount target inside the outer container -- set up in allocate.
+  # Contract tasks read inlined yamls + scripts from here.
+  REPO: /spread-bread
+  PATH: $PATH:$REPO/scripts
+
+exclude:
+  - .git
+  - .github
+
+backends:
+  outer:
+    type: adhoc
+
+    allocate: |
+      #spellchecker: ignore noninteractice
+
+      set -e
+
+      ver=$(echo "$SPREAD_SYSTEM" | cut -d- -f2)   # ubuntu-26.04-amd64 -> 26.04
+      arch=$(echo "$SPREAD_SYSTEM" | cut -d- -f3)  # ubuntu-26.04-amd64 -> amd64
+
+      image="bread-test:$ver-$arch"
+      echo "outer image: $image"
+
+      # Repo root on the host machine where `spread` is being invoked.
+      # Convention: `make test` (or equivalent) cd's into tests/ before
+      # calling spread, so $PWD here is the tests/ dir and `..` is repo root.
+      repo_root=$(cd .. && pwd)
+      echo "repo_root (host): $repo_root"
+
+      # Unique container name per worker.
+      sleep 0.$RANDOM
+      export counter_file=".spread-worker-num"
+      instance_num=$(
+          flock -x $counter_file bash -c '
+          [ -s $counter_file ] || echo 0 > $counter_file
+          num=$(< $counter_file) && echo $num
+          echo $(( $num + 1 )) > $counter_file'
+      )
+      container_name="bread-test-${ver}-${arch}-${instance_num}"
+      echo "outer container: $container_name"
+
+      # --privileged + docker socket so the outer container can spawn
+      # inner bread / bread-chisel-releases containers as siblings on
+      # the host docker daemon.
+      docker run \
+          --rm \
+          --platform "linux/$arch" \
+          --privileged \
+          -v /var/run/docker.sock:/var/run/docker.sock \
+          -v "$repo_root:/spread-bread:ro" \
+          -e DEBIAN_FRONTEND=noninteractice \
+          -e "usr=$SPREAD_SYSTEM_USERNAME" \
+          -e "pass=$SPREAD_SYSTEM_PASSWORD" \
+          --name "$container_name" \
+          -d "$image"
+
+      until docker exec "$container_name" pgrep sshd; do sleep 1; done
+
+      ADDRESS "$(docker inspect "$container_name" --format '{{.NetworkSettings.Networks.bridge.IPAddress}}')"
+
+    discard: |
+      set -e
+
+      container_name=""
+      for cid in $(docker ps -a --filter "network=bridge" --format '{{.ID}}'); do
+          cname=$(docker inspect "$cid" --format '{{.Name}}' | sed 's/^\/\(.*\)/\1/')
+          cip=$(docker inspect "$cid" --format '{{.NetworkSettings.Networks.bridge.IPAddress}}' || echo "")
+          if [ "$cip" == "$SPREAD_SYSTEM_ADDRESS" ]; then
+              container_name="$cname"
+              break
+          fi
+      done
+
+      if [ -n "$container_name" ]; then
+          echo "Removing outer container: $container_name"
+          docker rm -f "$container_name" 2>/dev/null || true
+      else
+          echo "No outer container found with IP $SPREAD_SYSTEM_ADDRESS"
+          exit 1
+      fi
+
+    systems:
+      - ubuntu-26.04-amd64:
+          password: bread
+          workers: 1
+      - ubuntu-26.04-arm64:
+          password: bread
+          workers: 1
+
+suites:
+  contract-bread/:
+    summary: bread image contract -- exercises inlined/bread-<ver>.yaml
+    # task.yaml here will run inner spread against each bread inlined yaml.
+    # Variants below pick which version to exercise.
+    environment:
+      INLINED/v24_04: $REPO/inlined/bread-24.04.yaml
+      INLINED/v25_10: $REPO/inlined/bread-25.10.yaml
+      INLINED/v26_04: $REPO/inlined/bread-26.04.yaml
+
+  contract-bread-chisel-releases/:
+    summary: bread-chisel-releases image contract
+    environment:
+      INLINED/v24_04: $REPO/inlined/bread-chisel-releases-24.04.yaml
+      INLINED/v25_10: $REPO/inlined/bread-chisel-releases-25.10.yaml
+      INLINED/v26_04: $REPO/inlined/bread-chisel-releases-26.04.yaml

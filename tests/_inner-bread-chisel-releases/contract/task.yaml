@@ -1,0 +1,39 @@
+summary: bread-chisel-releases image contract (bread checks + chisel + tools)
+
+execute: |
+  set -e
+
+  expected_ver=$(echo "$SPREAD_SYSTEM" | cut -d- -f2)
+  expected_arch=$(echo "$SPREAD_SYSTEM" | cut -d- -f3)
+
+  actual_ver=$(. /etc/os-release && echo "$VERSION_ID")
+  if [ "$expected_ver" != "$actual_ver" ]; then
+      echo "ver mismatch: expected=$expected_ver got=$actual_ver"
+      exit 1
+  fi
+
+  case "$(uname -m)" in
+      x86_64)  actual_arch=amd64 ;;
+      aarch64) actual_arch=arm64 ;;
+      *)       actual_arch=$(uname -m) ;;
+  esac
+  if [ "$expected_arch" != "$actual_arch" ]; then
+      echo "arch mismatch: expected=$expected_arch got=$actual_arch"
+      exit 1
+  fi
+
+  # chisel pinned to v1.4.1 by the chisel-releases-bread Dockerfile.
+  chisel --version | grep -q "v1\.4\.1" || {
+      echo "chisel binary missing or wrong version"
+      chisel --version || true
+      exit 1
+  }
+
+  for cmd in curl wget git jq file sudo tree docker skopeo; do
+      command -v "$cmd" >/dev/null || {
+          echo "missing command: $cmd"
+          exit 1
+      }
+  done
+
+  echo "ok: $SPREAD_SYSTEM"
