@@ -85,12 +85,6 @@ backends:
       - ubuntu-24.04-arm64:
           password: bread
           workers: 2
-      - ubuntu-25.10-amd64:
-          password: bread
-          workers: 2
-      - ubuntu-25.10-arm64:
-          password: bread
-          workers: 2
       - ubuntu-26.04-amd64:
           password: bread
           workers: 2

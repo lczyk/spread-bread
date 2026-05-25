@@ -4,17 +4,25 @@
 PYTHON ?= python3
 DOCKER ?= docker
 
+# Full matrix.
 VERSIONS := 24.04 25.10 26.04
 ARCHES   := amd64 arm64
 
-# Helpers to split "<ver>-<arch>" into pieces using `-` as separator.
-# Note: ubuntu version contains `.` (not `-`) so a single split is unambiguous.
-get_ver   = $(firstword $(subst -, ,$1))
-get_arch  = $(lastword $(subst -, ,$1))
+# Optional narrowing via env vars, e.g.:
+#   make build-bread VER=24.04
+#   make build-bread VER=24.04 ARCH=amd64
+#   make build-chisel-releases-bread ARCH=arm64
+VER  ?=
+ARCH ?=
+SELECTED_VERS   := $(if $(strip $(VER)),$(VER),$(VERSIONS))
+SELECTED_ARCHES := $(if $(strip $(ARCH)),$(ARCH),$(ARCHES))
+SELECTED_VER_ARCH := $(foreach v,$(SELECTED_VERS),$(foreach a,$(SELECTED_ARCHES),$(v)-$(a)))
 
-VER_ARCH      := $(foreach v,$(VERSIONS),$(foreach a,$(ARCHES),$(v)-$(a)))
-BREAD_TARGETS  := $(addprefix build-bread-,$(VER_ARCH))
-CHISEL_TARGETS := $(addprefix build-chisel-releases-bread-,$(VER_ARCH))
+# Full (non-narrowed) matrix used by `clean` so it nukes everything.
+FULL_VER_ARCH := $(foreach v,$(VERSIONS),$(foreach a,$(ARCHES),$(v)-$(a)))
+
+BREAD_STAMPS  := $(addprefix .stamp/bread-,$(SELECTED_VER_ARCH))
+CHISEL_STAMPS := $(addprefix .stamp/chisel-releases-bread-,$(SELECTED_VER_ARCH))
 
 TEMPLATES := $(wildcard templates/*.yaml.in)
 INLINED   := $(patsubst templates/%.yaml.in,inlined/%.yaml,$(TEMPLATES))
@@ -23,28 +31,35 @@ SCRIPTS := $(wildcard scripts/*.sh)
 
 .PHONY: help
 help:  ## Show this help
-	@grep -E '^[a-zA-Z_./%-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
+	@grep -E '^[a-zA-Z_./-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-40s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: all
 all: build-all inlined-yaml-files  ## Build all images + generate inlined yamls
 
 .PHONY: build-all
-build-all: $(BREAD_TARGETS) $(CHISEL_TARGETS)  ## Build all 12 images (lean + chisel, 3 vers x 2 arches)
+build-all: build-bread build-chisel-releases-bread  ## Build all images (narrow via VER=... ARCH=...)
 
 .PHONY: build-bread
-build-bread: $(BREAD_TARGETS)  ## Build all 6 lean bread images
+build-bread: $(BREAD_STAMPS)  ## Build lean bread images (narrow via VER=... ARCH=...)
 
 .PHONY: build-chisel-releases-bread
-build-chisel-releases-bread: $(CHISEL_TARGETS)  ## Build all 6 chisel-releases-bread images
+build-chisel-releases-bread: $(CHISEL_STAMPS)  ## Build chisel-releases-bread images (narrow via VER=... ARCH=...)
+
+# Demo runs only on LTS versions (24.04, 26.04) x both arches, regardless of VER/ARCH narrowing.
+DEMO_STAMPS := $(foreach a,$(ARCHES),.stamp/bread-24.04-$(a) .stamp/bread-26.04-$(a))
+
+.PHONY: demo
+demo: $(DEMO_STAMPS)  ## Run the spread demo on LTS systems (24.04 + 26.04, both arches)
+	$(MAKE) -C demo run
 
 .PHONY: inlined-yaml-files
 inlined-yaml-files: $(INLINED)  ## Generate inlined/*.yaml from templates/*.yaml.in
 
 # Hash-stamp pattern: stamp file contents = hash of all inputs that affect
-# this image. FORCE-dep makes us recompute hash each run; stamp mtime only
-# updates when content changes, so downstream rebuilds only fire on a real
-# input change.
+# this image. FORCE-dep makes us recompute hash each run; stamp content only
+# updates when inputs change, so downstream rebuilds only fire on a real
+# input change. Heavy lifting lives in hack/build_image.sh.
 .PHONY: FORCE
 FORCE:
 
@@ -54,39 +69,10 @@ FORCE:
 	@mkdir -p $@
 
 .stamp/bread-%: FORCE | .stamp
-	@new=$$(hack/hash_inputs.sh bread-$*) ; \
-		cur=$$(cat $@ 2>/dev/null || true) ; \
-		if [ "$$new" != "$$cur" ]; then \
-			echo "==> building bread:$* (inputs changed)" ; \
-			$(DOCKER) build \
-				--tag bread:$* \
-				--file images/Dockerfile.bread-$(call get_ver,$*) \
-				--platform linux/$(call get_arch,$*) \
-				. ; \
-			echo "$$new" > $@ ; \
-		else \
-			echo "==> bread:$* up-to-date (stamp matches)" ; \
-		fi
+	@hack/build_image.sh bread-$*
 
 .stamp/chisel-releases-bread-%: .stamp/bread-% FORCE | .stamp
-	@new=$$(hack/hash_inputs.sh chisel-releases-bread-$*) ; \
-		cur=$$(cat $@ 2>/dev/null || true) ; \
-		if [ "$$new" != "$$cur" ]; then \
-			echo "==> building chisel-releases-bread:$* (inputs changed)" ; \
-			$(DOCKER) build \
-				--tag chisel-releases-bread:$* \
-				--build-arg BASE_TAG=$* \
-				--file images/Dockerfile.chisel-releases-bread-$(call get_ver,$*) \
-				--platform linux/$(call get_arch,$*) \
-				. ; \
-			echo "$$new" > $@ ; \
-		else \
-			echo "==> chisel-releases-bread:$* up-to-date (stamp matches)" ; \
-		fi
-
-build-bread-%: .stamp/bread-% ; @:  ## Build a single lean bread image (e.g. build-bread-24.04-amd64)
-
-build-chisel-releases-bread-%: .stamp/chisel-releases-bread-% ; @:  ## Build a single chisel-releases-bread image
+	@hack/build_image.sh chisel-releases-bread-$*
 
 inlined/%.yaml: templates/%.yaml.in hack/inline_scripts.py $(SCRIPTS)
 	@mkdir -p inlined
@@ -94,7 +80,7 @@ inlined/%.yaml: templates/%.yaml.in hack/inline_scripts.py $(SCRIPTS)
 
 .PHONY: clean
 clean:  ## Remove built images, stamps, generated inlined yamls
-	-@$(foreach va,$(VER_ARCH), \
+	-@$(foreach va,$(FULL_VER_ARCH), \
 		$(DOCKER) rmi -f bread:$(va) chisel-releases-bread:$(va) 2>/dev/null ; )
 	rm -rf .stamp
 	rm -f $(INLINED)
