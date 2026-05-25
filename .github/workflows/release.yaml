@@ -70,3 +70,15 @@ jobs:
           files: inlined/*.yaml
           make_latest: true
           fail_on_unmatched_files: true
+          body: |
+            self-contained spread yamls for the bread + bread-chisel-releases
+            ghcr images. each yaml inlines the allocate / discard glue and
+            points at the matching ghcr multiarch image
+            (ghcr.io/lczyk/spread-bread/<flavour>:<ver>).
+
+            drop one into your project as `spread.yaml`:
+
+            ```
+            curl -fsSL https://github.com/lczyk/spread-bread/releases/latest/download/bread-chisel-releases-26.04.yaml -o spread.yaml
+            spread
+            ```
