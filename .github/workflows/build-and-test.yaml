@@ -7,6 +7,9 @@ name: Build and Test
 on:
   workflow_call:
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     strategy:
@@ -22,10 +25,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Restore cached binaries + stamp
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
           name: binaries-cache
           path: .

@@ -1,0 +1,10 @@
+version: 2
+
+updates:
+  # Keep the github-actions used in .github/workflows/ up to date.
+  # Actions are pinned to commit SHAs in the workflows; dependabot
+  # opens a PR when the upstream tag (e.g. v6) moves to a new SHA.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
