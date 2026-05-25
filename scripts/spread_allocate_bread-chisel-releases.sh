@@ -7,7 +7,7 @@ arch=$(echo "$SPREAD_SYSTEM" | cut -d- -f3)  # e.g., ubuntu-24.04-amd64 -> amd64
 echo "ver: $ver"
 echo "arch: $arch"
 
-image="chisel-releases-bread:$ver-$arch"
+image="bread-chisel-releases:$ver-$arch"
 echo "image: $image"
 
 sleep 0.$RANDOM  # Minimize chances of a race condition
@@ -19,7 +19,7 @@ instance_num=$(
     echo $(( $num + 1 )) > $counter_file'
 )
 
-container_name="chisel-releases-bread-${ver}-${arch}-${instance_num}"
+container_name="bread-chisel-releases-${ver}-${arch}-${instance_num}"
 echo "container_name: $container_name"
 
 docker run \

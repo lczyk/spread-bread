@@ -18,13 +18,13 @@ exclude:
 backends:
   docker:
     type: adhoc
-    allocate: source scripts/spread_allocate_chisel-releases-bread.sh
-    discard: source scripts/spread_discard_chisel-releases-bread.sh
+    allocate: source scripts/spread_allocate_bread-chisel-releases.sh
+    discard: source scripts/spread_discard_bread-chisel-releases.sh
     systems:
-      - ubuntu-25.10-amd64:
+      - ubuntu-26.04-amd64:
           password: bread
           workers: 4
-      - ubuntu-25.10-arm64:
+      - ubuntu-26.04-arm64:
           password: bread
           workers: 4
 

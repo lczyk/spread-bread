@@ -3,7 +3,7 @@
 # Usage: build_image.sh <flavour-ver-arch>
 #   flavour-ver-arch examples:
 #     bread-24.04-amd64
-#     chisel-releases-bread-25.10-arm64
+#     bread-chisel-releases-25.10-arm64
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -34,11 +34,11 @@ case "$flavour" in
             --platform "linux/$arch" \
             .
         ;;
-    chisel-releases-bread)
+    bread-chisel-releases)
         docker build \
-            --tag "chisel-releases-bread:$ver-$arch" \
+            --tag "bread-chisel-releases:$ver-$arch" \
             --build-arg "BASE_TAG=$ver-$arch" \
-            --file "images/Dockerfile.chisel-releases-bread-$ver" \
+            --file "images/Dockerfile.bread-chisel-releases-$ver" \
             --platform "linux/$arch" \
             .
         ;;

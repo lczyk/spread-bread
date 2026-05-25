@@ -11,7 +11,7 @@ ARCHES   := amd64 arm64
 # Optional narrowing via env vars, e.g.:
 #   make build-bread VER=24.04
 #   make build-bread VER=24.04 ARCH=amd64
-#   make build-chisel-releases-bread ARCH=arm64
+#   make build-bread-chisel-releases ARCH=arm64
 VER  ?=
 ARCH ?=
 SELECTED_VERS   := $(if $(strip $(VER)),$(VER),$(VERSIONS))
@@ -22,7 +22,7 @@ SELECTED_VER_ARCH := $(foreach v,$(SELECTED_VERS),$(foreach a,$(SELECTED_ARCHES)
 FULL_VER_ARCH := $(foreach v,$(VERSIONS),$(foreach a,$(ARCHES),$(v)-$(a)))
 
 BREAD_STAMPS  := $(addprefix .stamp/bread-,$(SELECTED_VER_ARCH))
-CHISEL_STAMPS := $(addprefix .stamp/chisel-releases-bread-,$(SELECTED_VER_ARCH))
+CHISEL_STAMPS := $(addprefix .stamp/bread-chisel-releases-,$(SELECTED_VER_ARCH))
 
 TEMPLATES := $(wildcard templates/*.yaml.in)
 INLINED   := $(patsubst templates/%.yaml.in,inlined/%.yaml,$(TEMPLATES))
@@ -38,13 +38,13 @@ help:  ## Show this help
 all: build-all inlined-yaml-files  ## Build all images + generate inlined yamls
 
 .PHONY: build-all
-build-all: build-bread build-chisel-releases-bread  ## Build all images (narrow via VER=... ARCH=...)
+build-all: build-bread build-bread-chisel-releases  ## Build all images (narrow via VER=... ARCH=...)
 
 .PHONY: build-bread
 build-bread: $(BREAD_STAMPS)  ## Build bread images (narrow via VER=... ARCH=...)
 
-.PHONY: build-chisel-releases-bread
-build-chisel-releases-bread: $(CHISEL_STAMPS)  ## Build chisel-releases-bread images (narrow via VER=... ARCH=...)
+.PHONY: build-bread-chisel-releases
+build-bread-chisel-releases: $(CHISEL_STAMPS)  ## Build bread-chisel-releases images (narrow via VER=... ARCH=...)
 
 # Demo runs only on LTS versions (24.04, 26.04) x both arches, regardless of VER/ARCH narrowing.
 DEMO_STAMPS := $(foreach a,$(ARCHES),.stamp/bread-24.04-$(a) .stamp/bread-26.04-$(a))
@@ -63,7 +63,7 @@ inlined-yaml-files: $(INLINED)  ## Generate inlined/*.yaml from templates/*.yaml
 .PHONY: FORCE
 FORCE:
 
-.PRECIOUS: .stamp/bread-% .stamp/chisel-releases-bread-%
+.PRECIOUS: .stamp/bread-% .stamp/bread-chisel-releases-%
 
 .stamp:
 	@mkdir -p $@
@@ -71,8 +71,8 @@ FORCE:
 .stamp/bread-%: FORCE | .stamp
 	@hack/build_image.sh bread-$*
 
-.stamp/chisel-releases-bread-%: .stamp/bread-% FORCE | .stamp
-	@hack/build_image.sh chisel-releases-bread-$*
+.stamp/bread-chisel-releases-%: .stamp/bread-% FORCE | .stamp
+	@hack/build_image.sh bread-chisel-releases-$*
 
 inlined/%.yaml: templates/%.yaml.in hack/inline_scripts.py $(SCRIPTS)
 	@mkdir -p inlined
@@ -81,7 +81,7 @@ inlined/%.yaml: templates/%.yaml.in hack/inline_scripts.py $(SCRIPTS)
 .PHONY: clean
 clean:  ## Remove built images, stamps, generated inlined yamls
 	-@$(foreach va,$(FULL_VER_ARCH), \
-		$(DOCKER) rmi -f bread:$(va) chisel-releases-bread:$(va) 2>/dev/null ; )
+		$(DOCKER) rmi -f bread:$(va) bread-chisel-releases:$(va) 2>/dev/null ; )
 	rm -rf .stamp
 	rm -f $(INLINED)
 

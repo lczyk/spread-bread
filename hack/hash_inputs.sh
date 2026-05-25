@@ -3,7 +3,7 @@
 # Usage: hash_inputs.sh <flavour-ver-arch>
 #   flavour-ver-arch examples:
 #     bread-24.04-amd64
-#     chisel-releases-bread-25.10-arm64
+#     bread-chisel-releases-25.10-arm64
 # Stdout: hex digest only.
 set -euo pipefail
 
@@ -19,9 +19,9 @@ case "$flavour" in
     bread)
         inputs=("images/Dockerfile.bread-$ver")
         ;;
-    chisel-releases-bread)
+    bread-chisel-releases)
         inputs=(
-            "images/Dockerfile.chisel-releases-bread-$ver"
+            "images/Dockerfile.bread-chisel-releases-$ver"
             ".stamp/bread-$ver-$arch"
         )
         ;;

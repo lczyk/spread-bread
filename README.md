@@ -25,7 +25,7 @@ here is this project's pet bread:
 two image flavours, each for ubuntu 24.04, 25.10, 26.04 x amd64/arm64:
 
 - **`bread`** -- base image: ubuntu + sshd + docker.io. general-purpose spread system; the test suite installs whatever else it needs. docker.io is in the base so a bread container can host nested docker workloads.
-- **`chisel-releases-bread`** -- built on top of bread, adds `chisel` + the shell tooling typically needed by [chisel-releases](https://github.com/canonical/chisel-releases) spread tests (curl, wget, git, jq, file, sudo, tree, skopeo).
+- **`bread-chisel-releases`** -- built on top of bread, adds `chisel` + the shell tooling typically needed by [chisel-releases](https://github.com/canonical/chisel-releases) spread tests (curl, wget, git, jq, file, sudo, tree, skopeo).
 
 ## layout
 
@@ -66,7 +66,7 @@ narrow the matrix via `VER` / `ARCH`:
 ```
 make build-bread VER=24.04
 make build-bread VER=24.04 ARCH=amd64
-make build-chisel-releases-bread ARCH=arm64
+make build-bread-chisel-releases ARCH=arm64
 ```
 
 generate distribution yamls (already committed under `inlined/`, but regenerate after script edits):
@@ -83,5 +83,5 @@ make demo
 
 ## ghcr
 
-images will eventually be published to `ghcr.io/lczyk/spread-bread/{bread,chisel-releases-bread}:<ver>` as multiarch manifests. not yet wired up.
+images will eventually be published to `ghcr.io/lczyk/spread-bread/{bread,bread-chisel-releases}:<ver>` as multiarch manifests. not yet wired up.
 
