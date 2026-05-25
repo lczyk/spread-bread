@@ -33,8 +33,8 @@ FULL_VER_ARCH := $(foreach v,$(VERSIONS),$(foreach a,$(ARCHES),$(v)-$(a)))
 BREAD_STAMPS  := $(addprefix .stamp/bread-,$(SELECTED_VER_ARCH))
 CHISEL_STAMPS := $(addprefix .stamp/bread-chisel-releases-,$(SELECTED_VER_ARCH))
 
-# The test-host image only exists at 26.04 x both arches.
-BREAD_TEST_STAMPS := $(addprefix .stamp/bread-test-26.04-,$(ARCHES))
+# The test-host image only exists at 26.04. ARCH narrowing applies.
+BREAD_TEST_STAMPS := $(addprefix .stamp/bread-test-26.04-,$(SELECTED_ARCHES))
 
 TEMPLATES := $(wildcard templates/*.yaml.in)
 INLINED   := $(patsubst templates/%.yaml.in,inlined/%.yaml,$(TEMPLATES))
