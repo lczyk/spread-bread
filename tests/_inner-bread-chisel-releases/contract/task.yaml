@@ -36,4 +36,28 @@ execute: |
       }
   done
 
+  # bread-warning: file present + prints exactly once on a forced login shell.
+  test -r /etc/profile.d/00-bread-warning.sh || {
+      echo "missing /etc/profile.d/00-bread-warning.sh"
+      exit 1
+  }
+  grep -q "bread-warning" /root/.bashrc || {
+      echo "/root/.bashrc missing bread-warning hook"
+      exit 1
+  }
+  out=$(BREAD_BANNER_FORCE=1 bash -l -c true 2>&1)
+  count=$(echo "$out" | grep -c "INSECURE TEST IMAGE" || true)
+  if [ "$count" != "1" ]; then
+      echo "banner print count: expected=1 got=$count"
+      echo "---"
+      echo "$out"
+      echo "---"
+      exit 1
+  fi
+  silent=$(bash -l -c true 2>&1)
+  if echo "$silent" | grep -q "INSECURE TEST IMAGE"; then
+      echo "banner leaked on non-tty"
+      exit 1
+  fi
+
   echo "ok: $SPREAD_SYSTEM"
