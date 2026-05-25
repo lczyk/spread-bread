@@ -20,6 +20,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
 
     steps:
       - name: Download amd64 image tarballs
@@ -59,5 +60,24 @@ jobs:
               buildah manifest push --format oci --all "$m" \
                 "docker://$REGISTRY/${{ github.repository }}/$flavour:$ver"
               buildah manifest rm "$m"
+            done
+          done
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Cosign login to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | \
+              cosign login --username "${{ github.actor }}" \
+                  --password-stdin "$REGISTRY"
+
+      - name: Sign each multiarch manifest (keyless OIDC)
+        run: |
+          set -e
+          for flavour in bread bread-chisel-releases; do
+            for ver in 24.04 25.10 26.04; do
+              cosign sign --yes \
+                "$REGISTRY/${{ github.repository }}/$flavour:$ver"
             done
           done
