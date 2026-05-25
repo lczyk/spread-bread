@@ -23,8 +23,9 @@ RUN printf '%s\n' \
 
 # Insecure-image warning. Prints on interactive logins (ssh, `docker exec -it`).
 # See hack/bread-warning.sh for design notes.
-COPY hack/bread-warning.sh /etc/profile.d/00-bread-warning.sh
-RUN chmod 0644 /etc/profile.d/00-bread-warning.sh && \
+COPY hack/banner.txt        /etc/bread-banner.txt
+COPY hack/bread-warning.sh  /etc/profile.d/00-bread-warning.sh
+RUN chmod 0644 /etc/bread-banner.txt /etc/profile.d/00-bread-warning.sh && \
     printf '\n# bread-warning\n[ -r /etc/profile.d/00-bread-warning.sh ] && . /etc/profile.d/00-bread-warning.sh\n' >> /root/.bashrc
 
 EXPOSE 22

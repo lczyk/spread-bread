@@ -38,6 +38,7 @@ case "$flavour" in
         inputs=(
             "images/Dockerfile.bread-$ver"
             "hack/bread-warning.sh"
+            "hack/banner.txt"
         )
         ;;
     bread-chisel-releases)

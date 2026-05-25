@@ -5,9 +5,13 @@
 # session. Silent on non-tty (spread, scripts, ci logs) unless
 # BREAD_BANNER_FORCE is set.
 #
+# Banner content is verbatim from /etc/bread-banner.txt (shipped from
+# hack/banner.txt). On tty the "!! INSECURE TEST IMAGE !!" header is wrapped
+# in red ANSI; everything else is printed as-is.
+#
 # Note: sshd `Banner` (pre-auth) was considered and rejected. sshd has no
 # tty-conditional banner; the openssh client prints SSH_MSG_USERAUTH_BANNER
-# to stderr on every connection, which would inject 9 lines of noise into
+# to stderr on every connection, which would inject ~14 lines of noise into
 # every non-interactive `ssh root@host cmd` that spread runs. This shell
 # hook covers every interactive path a human actually hits (ssh login shell
 # + bashrc for `docker exec -it`), so the pre-auth banner buys nothing
@@ -20,24 +24,16 @@ if [ ! -t 1 ] && [ -z "$BREAD_BANNER_FORCE" ]; then
 fi
 export BREAD_BANNER_SHOWN=1
 
+__bw_banner=/etc/bread-banner.txt
+[ -r "$__bw_banner" ] || { unset __bw_banner; return 0; }
+
 if [ -t 1 ] && [ -z "$NO_COLOR" ]; then
     __bw_r=$(printf '\033[1;31m')
     __bw_n=$(printf '\033[0m')
+    sed "s/!! INSECURE TEST IMAGE !!/${__bw_r}!! INSECURE TEST IMAGE !!${__bw_n}/" "$__bw_banner"
+    unset __bw_r __bw_n
 else
-    __bw_r=''
-    __bw_n=''
+    cat "$__bw_banner"
 fi
 
-cat <<EOF
-###############################################################################
-#                          ${__bw_r}!! INSECURE TEST IMAGE !!${__bw_n}                          #
-#                                                                             #
-#  this image accepts ANY password for root (pam_permit). built for spread    #
-#  test containers only. do NOT expose to networks, do NOT use in prod, do    #
-#  NOT use for anything that needs auth. throwaway only.                      #
-#                                                                             #
-#  see: github.com/lczyk/spread-bread                                         #
-###############################################################################
-EOF
-
-unset __bw_r __bw_n
+unset __bw_banner
