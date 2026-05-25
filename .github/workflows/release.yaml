@@ -27,7 +27,7 @@ jobs:
       packages: write
 
   publish-release:
-    needs: [binaries, build-and-test]
+    needs: [binaries, build-and-test, publish-ghcr]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
