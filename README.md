@@ -4,6 +4,7 @@
 [![yamls](https://img.shields.io/github/v/release/lczyk/spread-bread?label=yamls)](https://github.com/lczyk/spread-bread/releases/latest)
 [![ghcr bread](https://img.shields.io/badge/ghcr-bread-blue?logo=docker)](https://github.com/lczyk/spread-bread/pkgs/container/spread-bread%2Fbread)
 [![ghcr bread-chisel-releases](https://img.shields.io/badge/ghcr-bread--chisel--releases-blue?logo=docker)](https://github.com/lczyk/spread-bread/pkgs/container/spread-bread%2Fbread-chisel-releases)
+[![Ubuntu](https://img.shields.io/badge/Ubuntu-E95420?logo=ubuntu&logoColor=white)](#)
 
 because it rhymes 🤷🏻‍♀️
 
