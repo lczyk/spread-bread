@@ -1,0 +1,63 @@
+name: Push to GHCR
+
+# Reusable. Downloads per-arch image tarballs produced by build-oci.yaml,
+# stitches a multiarch manifest list per (flavour, ver) via buildah, and
+# pushes each to ghcr.io/<repo>/{bread,bread-chisel-releases}:<ver>.
+#
+# Expects images-amd64 + images-arm64 artefacts to already exist (caller
+# must have run build-oci.yaml in the same workflow run).
+
+on:
+  workflow_call:
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  stitch-and-push:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Download amd64 image tarballs
+        uses: actions/download-artifact@v6
+        with:
+          name: images-amd64
+          path: amd64
+
+      - name: Download arm64 image tarballs
+        uses: actions/download-artifact@v6
+        with:
+          name: images-arm64
+          path: arm64
+
+      - name: Install buildah
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y buildah
+
+      - name: Login to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | \
+              buildah login --username "${{ github.actor }}" \
+                  --password-stdin "$REGISTRY"
+
+      - name: Stitch + push multiarch manifests
+        run: |
+          set -e
+          for flavour in bread bread-chisel-releases; do
+            for ver in 24.04 25.10 26.04; do
+              m="$flavour-$ver-manifest"
+              buildah manifest create "$m"
+              buildah manifest add --arch amd64 "$m" \
+                "docker-archive:amd64/$flavour-$ver-amd64.tar"
+              buildah manifest add --arch arm64 "$m" \
+                "docker-archive:arm64/$flavour-$ver-arm64.tar"
+              buildah manifest push --format oci --all "$m" \
+                "docker://$REGISTRY/${{ github.repository }}/$flavour:$ver"
+              buildah manifest rm "$m"
+            done
+          done

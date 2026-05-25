@@ -2,8 +2,11 @@ name: Release
 run-name: Release ${{ github.ref_name }}
 
 # Build + test + publish on push of a revision tag (r1, r2, ...).
-# Rolling: each new rev tag replaces the previous GitHub release; only
-# the latest release survives. ghcr image tags are versioned and stay.
+# Rolling: every rev tag triggers a new release. Only the latest GitHub
+# release survives -- it is always named "yamls" and carries the
+# inlined/*.yaml distribution artefacts. ghcr image tags are versioned
+# per-flavour (ghcr.io/<repo>/{bread,bread-chisel-releases}:<ver>) and
+# stay around as overwrite-on-push tags.
 
 on:
   push:
@@ -19,15 +22,19 @@ jobs:
     needs: binaries
     uses: ./.github/workflows/build-and-test.yaml
 
-  publish-ghcr:
+  build-oci:
     needs: [binaries, build-and-test]
-    uses: ./.github/workflows/publish-ghcr.yaml
+    uses: ./.github/workflows/build-oci.yaml
+
+  push-ghcr:
+    needs: build-oci
+    uses: ./.github/workflows/push-ghcr.yaml
     permissions:
       contents: read
       packages: write
 
   publish-release:
-    needs: [binaries, build-and-test, publish-ghcr]
+    needs: build-oci
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -55,11 +62,11 @@ jobs:
               fi
             done
 
-      - name: Create release w/ inlined yamls
+      - name: Create release "yamls" w/ inlined yamls attached
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
+          name: yamls
           files: inlined/*.yaml
           make_latest: true
           fail_on_unmatched_files: true
