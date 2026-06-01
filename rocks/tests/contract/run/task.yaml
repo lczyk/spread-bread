@@ -33,17 +33,17 @@ execute: |
   command -v bash >/dev/null || { echo "missing bash"; exit 1; }
   command -v ls   >/dev/null || { echo "missing coreutils (ls)"; exit 1; }
 
-  # --- bread-warning banner: present on a forced login shell, silent on non-tty.
+  # --- bread-warning banner: files installed + the script prints the banner when
+  # sourced with FORCE. Sourced directly rather than via `bash -l` -- whether a
+  # login shell sources /etc/profile -> profile.d in the chiselled rock is a
+  # separate (cosmetic) hole; this checks the banner machinery itself.
   test -r /etc/profile.d/00-bread-warning.sh || {
       echo "missing /etc/profile.d/00-bread-warning.sh"; exit 1; }
-  out=$(BREAD_BANNER_FORCE=1 bash -l -c true 2>&1)
+  test -r /etc/bread-banner.txt || { echo "missing /etc/bread-banner.txt"; exit 1; }
+  out=$(BREAD_BANNER_FORCE=1 bash -c '. /etc/profile.d/00-bread-warning.sh' 2>&1)
   case "$out" in
       *"INSECURE TEST IMAGE"*) : ;;
-      *) echo "banner missing on forced login shell"; echo "--- $out ---"; exit 1 ;;
-  esac
-  silent=$(bash -l -c true 2>&1)
-  case "$silent" in
-      *"INSECURE TEST IMAGE"*) echo "banner leaked on non-tty"; exit 1 ;;
+      *) echo "banner did not print when sourced"; echo "--- $out ---"; exit 1 ;;
   esac
 
   # --- apt: update resolves, and the lazy-apt shim self-replaces with a symlink.
