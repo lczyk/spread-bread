@@ -1,0 +1,69 @@
+summary: rock contract -- version/arch + bread bits, plus chisel/tooling for the cr flavour
+
+execute: |
+  set -e
+
+  name="$SPREAD_SYSTEM"
+  arch="${name##*-}"
+  rest="${name%-*}"
+  expected_ver="${rest##*-}"
+  flavour="${rest%-*}"
+
+  # --- ubuntu version (from base-files_release-info) matches the system name.
+  actual_ver=$(. /etc/os-release && echo "$VERSION_ID")
+  if [ "$expected_ver" != "$actual_ver" ]; then
+      echo "ver mismatch: expected=$expected_ver got=$actual_ver"
+      exit 1
+  fi
+
+  # --- arch matches (uname -m -> docker arch name).
+  case "$(uname -m)" in
+      x86_64)  actual_arch=amd64 ;;
+      aarch64) actual_arch=arm64 ;;
+      *)       actual_arch=$(uname -m) ;;
+  esac
+  if [ "$arch" != "$actual_arch" ]; then
+      echo "arch mismatch: expected=$arch got=$actual_arch"
+      exit 1
+  fi
+
+  # --- shell + core utils present.
+  command -v bash >/dev/null || { echo "missing bash"; exit 1; }
+  command -v ls   >/dev/null || { echo "missing coreutils (ls)"; exit 1; }
+
+  # --- bread-warning banner: file present + prints exactly once on a forced
+  # login shell, silent without a tty.
+  test -r /etc/profile.d/00-bread-warning.sh || {
+      echo "missing /etc/profile.d/00-bread-warning.sh"; exit 1; }
+  out=$(BREAD_BANNER_FORCE=1 bash -l -c true 2>&1)
+  count=$(echo "$out" | grep -c "INSECURE TEST IMAGE" || true)
+  if [ "$count" != "1" ]; then
+      echo "banner print count: expected=1 got=$count"
+      echo "--- $out ---"
+      exit 1
+  fi
+  silent=$(bash -l -c true 2>&1)
+  if echo "$silent" | grep -q "INSECURE TEST IMAGE"; then
+      echo "banner leaked on non-tty"; exit 1
+  fi
+
+  # --- apt: update resolves, and the lazy-apt shim fires (a non-update call
+  # runs apt-get update first, then replaces itself with a symlink to real apt).
+  apt-get update
+  [ -L /usr/local/bin/apt-get ] || { echo "lazy-apt shim did not self-replace"; exit 1; }
+
+  # --- chisel-releases flavour extras.
+  case "$flavour" in
+      *chisel*)
+          chisel --version | grep -q "v1\.4\.1" || {
+              echo "chisel missing or wrong version"; chisel --version || true; exit 1; }
+          chisel-hacked --version | grep -q "v1\.4\.1-hacked" || {
+              echo "chisel-hacked missing or wrong version"; chisel-hacked --version || true; exit 1; }
+          # tree + skopeo are holes (no slice yet) -> not checked.
+          for cmd in curl wget git jq file sudo ip docker; do
+              command -v "$cmd" >/dev/null || { echo "missing command: $cmd"; exit 1; }
+          done
+          ;;
+  esac
+
+  echo "ok: $SPREAD_SYSTEM"

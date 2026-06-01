@@ -1,0 +1,35 @@
+project: rocks
+
+path: /spread-bread-rocks
+
+exclude:
+  - .git
+  - .github
+
+backends:
+  # The bread rock IS the test host (unlike a payload rock), so allocate just
+  # `docker run`s the rock that was loaded into the local daemon as
+  # spread-rock-<dir>:latest, and ssh's in. One system per (flavour, ver, arch).
+  rock:
+    type: adhoc
+    allocate: source allocate.sh
+    discard: source discard.sh
+    systems:
+      - bread-24.04-amd64: {username: root, password: bread}
+      - bread-24.04-arm64: {username: root, password: bread}
+      - bread-25.10-amd64: {username: root, password: bread}
+      - bread-25.10-arm64: {username: root, password: bread}
+      - bread-26.04-amd64: {username: root, password: bread}
+      - bread-26.04-arm64: {username: root, password: bread}
+      - bread-chisel-releases-24.04-amd64: {username: root, password: bread}
+      - bread-chisel-releases-24.04-arm64: {username: root, password: bread}
+      - bread-chisel-releases-25.10-amd64: {username: root, password: bread}
+      - bread-chisel-releases-25.10-arm64: {username: root, password: bread}
+      - bread-chisel-releases-26.04-amd64: {username: root, password: bread}
+      - bread-chisel-releases-26.04-arm64: {username: root, password: bread}
+
+suites:
+  contract/:
+    summary: rock contract -- ubuntu version + arch + bread bits (+ chisel/tooling for the cr flavour)
+
+kill-timeout: 15m

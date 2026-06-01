@@ -1,0 +1,141 @@
+# spellchecker: ignore rockcraft chiselled coreutils passwd nologin sshd pebble chisel CHISEL GOTOOLCHAIN noninteractive
+
+name: bread-chisel-releases
+version: "25.10"
+summary: chiselled ubuntu 25.10 + sshd + chisel + tooling spread test-host rock
+description: |
+    Throwaway spread test-host for chisel-releases spread tests: a chiselled
+    (base: bare) Ubuntu 25.10 rock with bash, coreutils, openssh-server, apt, a
+    pam_permit-only auth stack, plus chisel (+ chisel-hacked), docker, and the
+    tooling chisel-releases tests typically need (curl, wget, git, jq, file,
+    sudo, ip).
+
+    INSECURE BY DESIGN. Built for ephemeral spread test containers only; never
+    expose to a network or use in production.
+
+base: bare
+build-base: ubuntu@25.10
+
+platforms:
+  amd64:
+  arm64:
+
+services:
+  sshd:
+    override: replace
+    command: /usr/local/bin/sshd-entry.sh
+    startup: enabled
+
+parts:
+  # --- de-novo copy of the bread base (rocks can't build from rocks) -------
+  bread:
+    plugin: nil
+    stage-packages:
+      - base-files_base
+      - base-files_etc
+      - base-files_var
+      - base-files_tmp
+      - base-files_lib
+      - base-files_home
+      - base-files_release-info
+      - base-files_chisel
+      - bash_bins
+      - coreutils_bins
+      - tar_bins
+      - gzip_bins
+      - base-passwd_data
+      - login_bins
+      - passwd_bins
+      - openssh-server_bins
+      - openssh-server_config
+      - ca-certificates_data
+      - libpam-modules_libs
+      - apt_apt-get
+      - apt_config
+      - apt_var
+      - apt_default-source-list
+      - dpkg_bins
+    override-build: |
+      set -eu
+      craftctl default
+      cd "$CRAFT_PART_INSTALL"
+
+      grep -q '^sshd:' etc/passwd || \
+          echo 'sshd:x:101:65534::/run/sshd:/usr/sbin/nologin' >> etc/passwd
+      hash=$(openssl passwd -6 bread)
+      {
+          printf 'root:%s:20000:0:99999:7:::\n' "$hash"
+          printf 'sshd:!:20000:0:99999:7:::\n'
+      } > etc/shadow
+      chmod 0640 etc/shadow
+
+      mkdir -p etc/ssh
+      cat > etc/ssh/sshd_config <<'EOF'
+      PermitRootLogin yes
+      PasswordAuthentication yes
+      UsePAM yes
+      Subsystem sftp /usr/lib/openssh/sftp-server
+      PidFile /run/sshd.pid
+      EOF
+
+      mkdir -p etc/pam.d
+      printf '%s\n' \
+          'auth     required pam_permit.so' \
+          'account  required pam_permit.so' \
+          'session  required pam_permit.so' \
+          'password required pam_permit.so' \
+          > etc/pam.d/sshd
+
+      cat > etc/profile <<'EOF'
+      if [ -d /etc/profile.d ]; then
+          for __pf in /etc/profile.d/*.sh; do
+              [ -r "$__pf" ] && . "$__pf"
+          done
+          unset __pf
+      fi
+      EOF
+
+      install -D -m0755 "$CRAFT_PROJECT_DIR/hack/sshd-entry.sh" usr/local/bin/sshd-entry.sh
+      install -D -m0755 "$CRAFT_PROJECT_DIR/hack/lazy-apt.sh"   usr/local/bin/apt-get
+      install    -m0755 "$CRAFT_PROJECT_DIR/hack/lazy-apt.sh"   usr/local/bin/apt
+      install -D -m0644 "$CRAFT_PROJECT_DIR/hack/banner.txt"        etc/bread-banner.txt
+      install -D -m0644 "$CRAFT_PROJECT_DIR/hack/bread-warning.sh"  etc/profile.d/00-bread-warning.sh
+      mkdir -p root
+      printf '\n# bread-warning\n[ -r /etc/profile.d/00-bread-warning.sh ] && . /etc/profile.d/00-bread-warning.sh\n' \
+          >> root/.bashrc
+
+  # --- chisel-releases tooling (slices where they exist) -------------------
+  # holes: tree + skopeo have no slice yet -> omitted for now.
+  tooling:
+    plugin: nil
+    stage-packages:
+      - curl_bins
+      - wget_bins
+      - git_bins
+      - git_http-support
+      - jq_bins
+      - file_bins
+      - sudo_bins
+      - sudo_config
+      - iproute2_ip-bin
+
+  # --- chisel + chisel-hacked, built from source (go is build-only) --------
+  chisel:
+    plugin: nil
+    build-snaps:
+      - go
+    build-packages:
+      - git
+    build-environment:
+      - CHISEL_REF: v1.4.1
+    override-build: bash "$CRAFT_PROJECT_DIR/hack/chisel_override_build.sh"
+
+  # --- docker static CLI ---------------------------------------------------
+  docker:
+    plugin: nil
+    build-packages:
+      - curl
+      - ca-certificates
+    build-environment:
+      - DOCKER_VERSION: 29.5.2
+    override-build: bash "$CRAFT_PROJECT_DIR/hack/docker_override_build.sh"

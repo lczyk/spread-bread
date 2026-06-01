@@ -1,0 +1,58 @@
+From 76d4ec4dfb51fc7d4d625c5ee6021d9452e6b263 Mon Sep 17 00:00:00 2001
+From: spread-bread <lczyk@spread-bread>
+Date: Mon, 1 Jun 2026 15:11:06 +0100
+Subject: [PATCH 2/3] chore: skip archive maintenance check via CHISEL_HACKS
+
+---
+ cmd/chisel/cmd_cut.go | 34 +++++++++++++++++++---------------
+ 1 file changed, 19 insertions(+), 15 deletions(-)
+
+diff --git a/cmd/chisel/cmd_cut.go b/cmd/chisel/cmd_cut.go
+index 98c1a36..b4381d4 100644
+--- a/cmd/chisel/cmd_cut.go
++++ b/cmd/chisel/cmd_cut.go
+@@ -107,22 +107,26 @@ func (cmd *cmdCut) Execute(args []string) error {
+ 		archives[archiveName] = openArchive
+ 	}
+ 
+-	hasMaintainedArchive := false
+-	for _, archive := range archives {
+-		if archive.Options().Maintained {
+-			hasMaintainedArchive = true
+-			break
++	if os.Getenv("CHISEL_HACKS") == "1" {
++		logf("Skipping archive maintenance check due to CHISEL_HACKS=1")
++	} else {
++		hasMaintainedArchive := false
++		for _, archive := range archives {
++			if archive.Options().Maintained {
++				hasMaintainedArchive = true
++				break
++			}
+ 		}
+-	}
+-	if !hasMaintainedArchive {
+-		if slices.Contains(cmd.Ignore, "unmaintained") {
+-			logf(`Warning: No archive has "maintained" maintenance status. ` +
+-				`Consider the different Ubuntu Pro subscriptions to be safe. ` +
+-				`See https://documentation.ubuntu.com/chisel/en/latest/reference/chisel-releases/chisel.yaml/#maintenance for details.`)
+-		} else {
+-			return fmt.Errorf(`no archive has "maintained" maintenance status, ` +
+-				`consider the different Ubuntu Pro subscriptions to be safe, ` +
+-				`see https://documentation.ubuntu.com/chisel/en/latest/reference/chisel-releases/chisel.yaml/#maintenance for details`)
++		if !hasMaintainedArchive {
++			if slices.Contains(cmd.Ignore, "unmaintained") {
++				logf(`Warning: No archive has "maintained" maintenance status. ` +
++					`Consider the different Ubuntu Pro subscriptions to be safe. ` +
++					`See https://documentation.ubuntu.com/chisel/en/latest/reference/chisel-releases/chisel.yaml/#maintenance for details.`)
++			} else {
++				return fmt.Errorf(`no archive has "maintained" maintenance status, ` +
++					`consider the different Ubuntu Pro subscriptions to be safe, ` +
++					`see https://documentation.ubuntu.com/chisel/en/latest/reference/chisel-releases/chisel.yaml/#maintenance for details`)
++			}
+ 		}
+ 	}
+ 
+-- 
+2.53.0
+

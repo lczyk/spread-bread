@@ -1,0 +1,27 @@
+From 7af23d09332e1fa104ad5c802e176e90f86d67d3 Mon Sep 17 00:00:00 2001
+From: spread-bread <lczyk@spread-bread>
+Date: Mon, 1 Jun 2026 15:11:28 +0100
+Subject: [PATCH 3/3] chore: skip release validation via CHISEL_HACKS
+
+---
+ internal/setup/setup.go | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/internal/setup/setup.go b/internal/setup/setup.go
+index 6ed24ab..01ea8eb 100644
+--- a/internal/setup/setup.go
++++ b/internal/setup/setup.go
+@@ -194,6 +194,10 @@ func ReadRelease(dir string) (*Release, error) {
+ 		return nil, err
+ 	}
+ 
++	if os.Getenv("CHISEL_HACKS") == "1" {
++		logf("Skipping release validation due to CHISEL_HACKS=1")
++		return release, nil
++	}
+ 	err = release.validate()
+ 	if err != nil {
+ 		return nil, err
+-- 
+2.53.0
+
