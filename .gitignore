@@ -3,5 +3,9 @@
 .spread-reuse.yaml
 .stamp/
 cache/
+
+# rockcraft (rocks/) build artefacts
+*.rock
+.rock.stamp
 __pycache__/
 *.pyc

@@ -1,0 +1,127 @@
+# spellchecker: ignore rockcraft chiselled coreutils passwd nologin sshd usrmerge pebble noninteractive
+
+name: bread
+version: "24.04"
+summary: chiselled ubuntu 24.04 + sshd spread test-host rock
+description: |
+    Throwaway spread test-host: a chiselled (base: bare) Ubuntu 24.04 rock with
+    just enough to act as a spread system -- bash, coreutils, openssh-server,
+    apt, and a pam_permit-only auth stack (accepts ANY password for root).
+
+    INSECURE BY DESIGN. Built for ephemeral spread test containers only; never
+    expose to a network or use in production.
+
+base: bare
+build-base: ubuntu@24.04
+
+platforms:
+  amd64:
+  arm64:
+
+# sshd runs as a pebble service (pebble is pid 1 in the rock). The
+# openssh-server_services slice ships systemd units, not a pebble layer, so we
+# drive sshd ourselves via hack/sshd-entry.sh (host-key gen + exec sshd -D).
+services:
+  sshd:
+    override: replace
+    command: /usr/local/bin/sshd-entry.sh
+    startup: enabled
+
+parts:
+  bread:
+    plugin: nil
+    stage-packages:
+      # fs skeleton + os-release (version contract check) + chisel manifest
+      - base-files_base
+      - base-files_etc
+      - base-files_var
+      - base-files_tmp
+      - base-files_lib
+      - base-files_home
+      - base-files_release-info
+      - base-files_chisel
+      # shell + core utils. tar + gzip are needed by spread to sync the
+      # project onto the system over ssh (not part of coreutils).
+      - bash_bins
+      - coreutils_bins
+      - tar_bins
+      - gzip_bins
+      # users / login (base-passwd_data writes /etc/passwd + /etc/group w/ root)
+      - base-passwd_data
+      - login_bins
+      - passwd_bins
+      # ssh (openssh-server_bins pulls openssh-client_bins -> ssh-keygen, and
+      # libpam-modules_libs -> pam_permit.so, as essentials)
+      - openssh-server_bins
+      - openssh-server_config
+      - ca-certificates_data
+      # pam: only pam_permit.so (always-allow). NOT libpam-modules_config /
+      # _pam-config -- we don't want the real pam_unix default stacks.
+      - libpam-modules_libs
+      # apt. apt_apt-get pulls dpkg_maintscript-support but NOT /usr/bin/dpkg,
+      # so apt-get install cannot unpack without dpkg_bins -- add it so the
+      # lazy-apt shim (and test suites that apt-get install) actually work.
+      - apt_apt-get
+      - apt_config
+      - apt_var
+      - apt_default-source-list
+      - dpkg_bins
+    override-build: |
+      set -eu
+      craftctl default
+      cd "$CRAFT_PART_INSTALL"
+
+      # --- users: base-passwd_data gives us /etc/passwd + /etc/group (incl
+      # root), but not the sshd privsep user nor any /etc/shadow. add both.
+      grep -q '^sshd:' etc/passwd || \
+          echo 'sshd:x:101:65534::/run/sshd:/usr/sbin/nologin' >> etc/passwd
+      # root password "bread" (matches the docker-image flavour). pam_permit
+      # makes the value irrelevant for auth, but root must not be locked.
+      hash=$(openssl passwd -6 bread)
+      {
+          printf 'root:%s:20000:0:99999:7:::\n' "$hash"
+          printf 'sshd:!:20000:0:99999:7:::\n'
+      } > etc/shadow
+      chmod 0640 etc/shadow
+
+      # --- sshd config. openssh-server_config ships sshd_config.d/ but not
+      # /etc/ssh/sshd_config itself, so write a minimal one.
+      mkdir -p etc/ssh
+      cat > etc/ssh/sshd_config <<'EOF'
+      PermitRootLogin yes
+      PasswordAuthentication yes
+      UsePAM yes
+      Subsystem sftp /usr/lib/openssh/sftp-server
+      PidFile /run/sshd.pid
+      EOF
+
+      # --- pam: permit-only stack (always-allow), verbatim shape from the
+      # docker-image flavour.
+      mkdir -p etc/pam.d
+      printf '%s\n' \
+          'auth     required pam_permit.so' \
+          'account  required pam_permit.so' \
+          'session  required pam_permit.so' \
+          'password required pam_permit.so' \
+          > etc/pam.d/sshd
+
+      # --- /etc/profile: base-files ships profile.d/ but not /etc/profile, so
+      # login shells wouldn't source the bread-warning banner. add a minimal one.
+      cat > etc/profile <<'EOF'
+      if [ -d /etc/profile.d ]; then
+          for __pf in /etc/profile.d/*.sh; do
+              [ -r "$__pf" ] && . "$__pf"
+          done
+          unset __pf
+      fi
+      EOF
+
+      # --- bread bits: sshd entrypoint, lazy-apt shim, insecure-image banner.
+      install -D -m0755 "$CRAFT_PROJECT_DIR/hack/sshd-entry.sh" usr/local/bin/sshd-entry.sh
+      install -D -m0755 "$CRAFT_PROJECT_DIR/hack/lazy-apt.sh"   usr/local/bin/apt-get
+      install    -m0755 "$CRAFT_PROJECT_DIR/hack/lazy-apt.sh"   usr/local/bin/apt
+      install -D -m0644 "$CRAFT_PROJECT_DIR/hack/banner.txt"        etc/bread-banner.txt
+      install -D -m0644 "$CRAFT_PROJECT_DIR/hack/bread-warning.sh"  etc/profile.d/00-bread-warning.sh
+      mkdir -p root
+      printf '\n# bread-warning\n[ -r /etc/profile.d/00-bread-warning.sh ] && . /etc/profile.d/00-bread-warning.sh\n' \
+          >> root/.bashrc
