@@ -29,6 +29,13 @@ execute: |
       exit 1
   }
 
+  # chisel-hacked: same base version, -hacked suffix in version string.
+  chisel-hacked --version | grep -q "v1\.4\.1-hacked" || {
+      echo "chisel-hacked binary missing or wrong version"
+      chisel-hacked --version || true
+      exit 1
+  }
+
   for cmd in curl wget git jq file sudo tree docker skopeo; do
       command -v "$cmd" >/dev/null || {
           echo "missing command: $cmd"

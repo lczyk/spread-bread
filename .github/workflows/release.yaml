@@ -70,9 +70,14 @@ jobs:
           cp cache/binaries/spread-arm64 release-out/spread-linux-arm64
           chmod +x release-out/spread-linux-*
 
+          # chisel-hacked binaries
+          cp cache/binaries/chisel-hacked-amd64 release-out/chisel-hacked-linux-amd64
+          cp cache/binaries/chisel-hacked-arm64 release-out/chisel-hacked-linux-arm64
+          chmod +x release-out/chisel-hacked-linux-*
+
           # sha256 sidecars (standard sha256sum format)
           cd release-out
-          for f in spread-linux-*; do
+          for f in spread-linux-* chisel-hacked-linux-*; do
             sha256sum -b "$f" > "$f.sha256"
           done
 
@@ -83,7 +88,7 @@ jobs:
         run: |
           set -e
           cd release-out
-          for f in spread-linux-amd64 spread-linux-arm64; do
+          for f in spread-linux-amd64 spread-linux-arm64 chisel-hacked-linux-amd64 chisel-hacked-linux-arm64; do
             cosign sign-blob --yes \
               --bundle "$f.cosign.bundle" \
               "$f"
@@ -134,6 +139,17 @@ jobs:
             ```
             curl -fsSL https://github.com/lczyk/spread-bread/releases/latest/download/spread-linux-amd64 -o /usr/local/bin/spread
             chmod +x /usr/local/bin/spread
+            ```
+
+            **precompiled chisel-hacked binaries** -- chisel v1.4.1 with
+            CHISEL_HACKS patches applied. when `CHISEL_HACKS=1` is set,
+            skips release maintenance checks and release validation -- used
+            by chisel-releases tests against in-development releases.
+            ships with `.sha256` and `.cosign.bundle` sidecars.
+
+            ```
+            curl -fsSL https://github.com/lczyk/spread-bread/releases/latest/download/chisel-hacked-linux-amd64 -o /usr/local/bin/chisel-hacked
+            chmod +x /usr/local/bin/chisel-hacked
             ```
 
             **ghcr image tags** stay around indefinitely under their

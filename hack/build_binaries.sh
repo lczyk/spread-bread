@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Cross-compile chisel + spread for both target arches inside a single
 # Canonical ubuntu/go:1.25-26.04_edge container. Output binaries land in
-# ./cache/binaries/{chisel,spread}-{amd64,arm64}.
+# ./cache/binaries/{chisel,chisel-hacked,spread}-{amd64,arm64}.
 #
 # Required env vars (set by makefile):
 #   CHISEL_REF        git ref (tag, branch, or SHA) for canonical/chisel
@@ -24,6 +24,7 @@ HGID=$(id -g)
 docker run --rm \
     --entrypoint=/bin/bash \
     -v "$(pwd)/cache/binaries:/out" \
+    -v "$(pwd)/patches/chisel:/patches/chisel:ro" \
     -e CHISEL_REF="$CHISEL_REF" \
     -e SPREAD_REF="$SPREAD_REF" \
     -e DOCKER_VERSION="$DOCKER_VERSION" \
@@ -79,6 +80,25 @@ rm -rf /src/chisel-vprobe
 
 build chisel https://github.com/canonical/chisel  "$CHISEL_REF" ./cmd/chisel \
     "-X github.com/canonical/chisel/cmd.Version=$CHISEL_VERSION_STRING"
+
+# Apply CHISEL_HACKS patches on top of the already-cloned source and build
+# the hacked variant. Version string gets a -hacked suffix so `chisel-hacked
+# --version` is distinguishable from the unpatched binary.
+cd /src/chisel
+for p in /patches/chisel/0001-*.patch /patches/chisel/0002-*.patch /patches/chisel/0003-*.patch; do
+    echo "==> applying patch: $(basename "$p")"
+    git apply "$p"
+done
+CHISEL_HACKED_VERSION_STRING="${CHISEL_VERSION_STRING}-hacked"
+echo "==> chisel-hacked version string: $CHISEL_HACKED_VERSION_STRING"
+for arch in amd64 arm64; do
+    echo "==> building chisel-hacked for $arch"
+    CGO_ENABLED=0 GOOS=linux GOARCH="$arch" \
+        go build -trimpath -ldflags "-s -w -X github.com/canonical/chisel/cmd.Version=$CHISEL_HACKED_VERSION_STRING" \
+        -o "/out/chisel-hacked-$arch" ./cmd/chisel
+done
+cd /
+
 build spread https://github.com/canonical/spread  "$SPREAD_REF" ./cmd/spread
 
 # Ensure curl + tar present for the docker download step.

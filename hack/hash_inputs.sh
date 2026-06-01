@@ -21,7 +21,7 @@ if [ "$name" = "binaries" ]; then
     : "${SPREAD_REF:?required}"
     : "${GO_BUILDER_IMAGE:?required}"
     : "${DOCKER_VERSION:?required}"
-    { sha256sum hack/build_binaries.sh; \
+    { sha256sum hack/build_binaries.sh patches/chisel/*.patch; \
       printf 'CHISEL_REF=%s\nSPREAD_REF=%s\nGO_BUILDER_IMAGE=%s\nDOCKER_VERSION=%s\n' \
           "$CHISEL_REF" "$SPREAD_REF" "$GO_BUILDER_IMAGE" "$DOCKER_VERSION"; \
     } | sha256sum | cut -d' ' -f1
