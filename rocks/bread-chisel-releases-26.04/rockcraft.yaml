@@ -27,37 +27,34 @@ services:
     startup: enabled
 
 parts:
-  # --- de-novo copy of the bread base (rocks can't build from rocks) -------
+  # --- de-novo copy of the bread base (rocks can't build from rocks), with
+  # the chisel-releases tooling slices folded into the same single cut. ------
   bread:
     plugin: nil
-    stage-packages:
-      - base-files_base
-      - base-files_etc
-      - base-files_var
-      - base-files_tmp
-      - base-files_lib
-      - base-files_home
-      - base-files_release-info
-      - base-files_chisel
-      - bash_bins
-      - coreutils_bins
-      - tar_bins
-      - gzip_bins
-      - base-passwd_data
-      - login_bins
-      - passwd_bins
-      - openssh-server_bins
-      - openssh-server_config
-      - ca-certificates_data
-      - libpam-modules_libs
-      - apt_apt-get
-      - apt_config
-      - apt_var
-      - apt_default-source-list
-      - dpkg_bins
+    build-snaps:
+      - chisel
+    build-packages:
+      - git
     override-build: |
       set -eu
-      craftctl default
+
+      releases=$(mktemp -d)
+      git clone --depth 1 --branch ubuntu-26.04 \
+          https://github.com/canonical/chisel-releases.git "$releases"
+
+      # bread base slices + chisel-releases tooling slices, one cut.
+      # holes: tree + skopeo have no slice yet -> omitted.
+      bash "$CRAFT_PROJECT_DIR/hack/chisel_cut.sh" "$releases" \
+          base-files_base base-files_etc base-files_var base-files_tmp \
+          base-files_lib base-files_home base-files_release-info base-files_chisel \
+          bash_bins coreutils_bins tar_bins gzip_bins \
+          base-passwd_data login_bins passwd_bins \
+          openssh-server_bins openssh-server_config ca-certificates_data \
+          libpam-modules_libs \
+          apt_apt-get apt_config apt_var apt_default-source-list dpkg_bins \
+          curl_bins wget_bins git_bins git_http-support jq_bins file_bins \
+          sudo_bins sudo_config iproute2_ip-bin
+
       cd "$CRAFT_PART_INSTALL"
 
       grep -q '^sshd:' etc/passwd || \
@@ -103,21 +100,6 @@ parts:
       mkdir -p root
       printf '\n# bread-warning\n[ -r /etc/profile.d/00-bread-warning.sh ] && . /etc/profile.d/00-bread-warning.sh\n' \
           >> root/.bashrc
-
-  # --- chisel-releases tooling (slices where they exist) -------------------
-  # holes: tree + skopeo have no slice yet -> omitted for now.
-  tooling:
-    plugin: nil
-    stage-packages:
-      - curl_bins
-      - wget_bins
-      - git_bins
-      - git_http-support
-      - jq_bins
-      - file_bins
-      - sudo_bins
-      - sudo_config
-      - iproute2_ip-bin
 
   # --- chisel + chisel-hacked, built from source (go is build-only) --------
   chisel:

@@ -29,46 +29,36 @@ services:
 
 parts:
   bread:
+    # We chisel-cut the slices ourselves rather than using stage-packages:
+    # rockcraft's stage-packages cut has no retry, and the chisel-releases
+    # archive intermittently flakes ("expected digest ..."). hack/chisel_cut.sh
+    # retries around that. (Pattern from not-quite-rust-rock.)
     plugin: nil
-    stage-packages:
-      # fs skeleton + os-release (version contract check) + chisel manifest
-      - base-files_base
-      - base-files_etc
-      - base-files_var
-      - base-files_tmp
-      - base-files_lib
-      - base-files_home
-      - base-files_release-info
-      - base-files_chisel
-      # shell + core utils. tar + gzip are needed by spread to sync the
-      # project onto the system over ssh (not part of coreutils).
-      - bash_bins
-      - coreutils_bins
-      - tar_bins
-      - gzip_bins
-      # users / login (base-passwd_data writes /etc/passwd + /etc/group w/ root)
-      - base-passwd_data
-      - login_bins
-      - passwd_bins
-      # ssh (openssh-server_bins pulls openssh-client_bins -> ssh-keygen, and
-      # libpam-modules_libs -> pam_permit.so, as essentials)
-      - openssh-server_bins
-      - openssh-server_config
-      - ca-certificates_data
-      # pam: only pam_permit.so (always-allow). NOT libpam-modules_config /
-      # _pam-config -- we don't want the real pam_unix default stacks.
-      - libpam-modules_libs
-      # apt. apt_apt-get pulls dpkg_maintscript-support but NOT /usr/bin/dpkg,
-      # so apt-get install cannot unpack without dpkg_bins -- add it so the
-      # lazy-apt shim (and test suites that apt-get install) actually work.
-      - apt_apt-get
-      - apt_config
-      - apt_var
-      - apt_default-source-list
-      - dpkg_bins
+    build-snaps:
+      - chisel
+    build-packages:
+      - git
     override-build: |
       set -eu
-      craftctl default
+
+      releases=$(mktemp -d)
+      git clone --depth 1 --branch ubuntu-25.10 \
+          https://github.com/canonical/chisel-releases.git "$releases"
+
+      # tar + gzip: needed by spread to sync the project onto the system over
+      # ssh (not part of coreutils). dpkg_bins: apt_apt-get only pulls
+      # dpkg_maintscript-support, so apt-get install can't unpack without it.
+      # pam: only libpam-modules_libs (carries pam_permit.so) -- NOT the
+      # _config / _pam-config default stacks.
+      bash "$CRAFT_PROJECT_DIR/hack/chisel_cut.sh" "$releases" \
+          base-files_base base-files_etc base-files_var base-files_tmp \
+          base-files_lib base-files_home base-files_release-info base-files_chisel \
+          bash_bins coreutils_bins tar_bins gzip_bins \
+          base-passwd_data login_bins passwd_bins \
+          openssh-server_bins openssh-server_config ca-certificates_data \
+          libpam-modules_libs \
+          apt_apt-get apt_config apt_var apt_default-source-list dpkg_bins
+
       cd "$CRAFT_PART_INSTALL"
 
       # --- users: base-passwd_data gives us /etc/passwd + /etc/group (incl
