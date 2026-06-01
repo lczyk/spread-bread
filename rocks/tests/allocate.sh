@@ -38,6 +38,28 @@ docker run \
     --name "$container_name" \
     -d "$tag"
 
-until docker exec "$container_name" pgrep sshd >/dev/null 2>&1; do sleep 1; done
+# Bounded wait for sshd. On timeout, dump pebble/sshd output (docker logs) +
+# a config check so ci shows WHY sshd didn't come up, then fail fast instead of
+# letting spread spin to the kill-timeout.
+ready=
+for _ in $(seq 1 60); do
+    if docker exec "$container_name" pgrep sshd >/dev/null 2>&1; then
+        ready=1
+        break
+    fi
+    sleep 1
+done
+
+if [ -z "$ready" ]; then
+    echo "ERROR: sshd did not come up in $container_name (60s)" >&2
+    echo "--- docker logs $container_name ---" >&2
+    docker logs "$container_name" >&2 2>&1 || true
+    echo "--- sshd -t (config test) ---" >&2
+    docker exec "$container_name" /usr/sbin/sshd -t >&2 2>&1 || true
+    echo "--- ls /usr/sbin/sshd /usr/lib/openssh /run/sshd ---" >&2
+    docker exec "$container_name" ls -l /usr/sbin/sshd /usr/lib/openssh /run/sshd >&2 2>&1 || true
+    docker rm -f "$container_name" >/dev/null 2>&1 || true
+    exit 1
+fi
 
 ADDRESS "$(docker inspect "$container_name" --format '{{.NetworkSettings.Networks.bridge.IPAddress}}')"
