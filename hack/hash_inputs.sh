@@ -44,6 +44,7 @@ case "$flavour" in
     bread-chisel-releases)
         inputs=(
             "images/Dockerfile.bread-chisel-releases-$ver"
+            "hack/lazy-apt.sh"
             ".stamp/bread-$ver-$arch"
             ".stamp/binaries"
         )

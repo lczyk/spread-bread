@@ -20,3 +20,9 @@ COPY cache/binaries/chisel-${BUILD_ARCH}        /usr/local/bin/chisel
 COPY cache/binaries/chisel-hacked-${BUILD_ARCH} /usr/local/bin/chisel-hacked
 COPY cache/binaries/docker-${BUILD_ARCH}        /usr/local/bin/docker
 RUN chmod +x /usr/local/bin/chisel /usr/local/bin/chisel-hacked /usr/local/bin/docker
+
+# Lazy-apt shim: auto-runs apt-get update on first non-update apt/apt-get call,
+# then self-destructs so subsequent calls hit real apt directly.
+# Needed because the image is built with apt lists wiped (apt-get clean above).
+COPY hack/lazy-apt.sh /usr/local/bin/apt-get
+RUN chmod +x /usr/local/bin/apt-get && cp /usr/local/bin/apt-get /usr/local/bin/apt
