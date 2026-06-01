@@ -53,7 +53,7 @@ parts:
           libpam-modules_libs \
           apt_apt-get apt_config apt_var apt_default-source-list dpkg_bins \
           curl_bins wget_bins git_bins git_http-support jq_bins file_bins \
-          sudo_bins sudo_config iproute2_ip-bin
+          sudo_bins sudo_config iproute2_bins
 
       cd "$CRAFT_PART_INSTALL"
 
