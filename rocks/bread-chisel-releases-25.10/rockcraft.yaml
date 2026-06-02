@@ -42,6 +42,15 @@ parts:
       git clone --depth 1 --branch ubuntu-25.10 \
           https://github.com/canonical/chisel-releases.git "$releases"
 
+      # OpenSSH >=9.8 (this release) re-execs sshd-session + sshd-auth per
+      # connection; the openssh-server slice ships only /usr/sbin/sshd, so sshd
+      # exits 255 at startup. Add them to the cloned slice before cutting.
+      # (24.04's OpenSSH 9.6 predates the split and has no such binaries.)
+      sed -i \
+          -e '\#^      /usr/sbin/sshd:#a\      /usr/lib/openssh/sshd-session:' \
+          -e '\#^      /usr/sbin/sshd:#a\      /usr/lib/openssh/sshd-auth:' \
+          "$releases/slices/openssh-server.yaml"
+
       # bread base slices + chisel-releases tooling slices, one cut.
       # holes: tree + skopeo have no slice yet -> omitted.
       bash "$CRAFT_PROJECT_DIR/hack/chisel_cut.sh" "$releases" \
