@@ -3,5 +3,14 @@
 .spread-reuse.yaml
 .stamp/
 cache/
+
+# rockcraft (rocks/) build artefacts
+*.rock
+.rock.stamp
+
+# per-rock hack/ + patches/ are synced from rocks/hack + rocks/patches
+# (see rocks/sync_shared.rb) -- only the shared source of truth is tracked.
+rocks/bread-*/hack/
+rocks/bread-*/patches/
 __pycache__/
 *.pyc
