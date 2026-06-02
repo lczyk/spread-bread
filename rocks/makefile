@@ -56,12 +56,12 @@ load:  ## Load every built rock into the local daemon as spread-rock-<dir>:lates
 	done
 
 .PHONY: test
-test: build-all load  ## Build + load all rocks, then run the top-level spread suite (native arch)
-	cd tests && spread $(SPREAD_FILTER)
+test: build-all load  ## Build + load all rocks, then run the rock suite (native arch)
+	cd ../tests && spread $(SPREAD_FILTER)
 
 .PHONY: spread-only
-spread-only: load  ## Load prebuilt rocks + run spread, no packing (for ci where rocks are downloaded)
-	cd tests && spread $(SPREAD_FILTER)
+spread-only: load  ## Load prebuilt rocks + run the rock suite, no packing (for ci where rocks are downloaded)
+	cd ../tests && spread $(SPREAD_FILTER)
 
 .PHONY: size
 size:  ## Show packed rock sizes
