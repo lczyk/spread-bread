@@ -16,7 +16,11 @@ build: $(ROCK)  ## Pack the rock (short-circuits if no inputs changed)
 .PHONY: FORCE
 FORCE:
 
-.rock.stamp: FORCE
+.PHONY: sync
+sync:  ## Populate hack/ (+ patches/) from shared rocks/hack
+	@ruby ../sync_shared.rb $(notdir $(CURDIR))
+
+.rock.stamp: sync FORCE
 	@new=$$(hack/hash_inputs.sh) ; \
 		cur=$$(cat $@ 2>/dev/null || true) ; \
 		[ "$$new" = "$$cur" ] || echo "$$new" > $@

@@ -18,7 +18,11 @@ FORCE:
 
 # Stamp content = hash of all build inputs; only rewritten when it changes, so
 # the rock only repacks on a real input change.
-.rock.stamp: FORCE
+.PHONY: sync
+sync:  ## Populate hack/ (+ patches/) from shared rocks/hack
+	@ruby ../sync_shared.rb $(notdir $(CURDIR))
+
+.rock.stamp: sync FORCE
 	@new=$$(hack/hash_inputs.sh) ; \
 		cur=$$(cat $@ 2>/dev/null || true) ; \
 		[ "$$new" = "$$cur" ] || echo "$$new" > $@
