@@ -2,26 +2,32 @@
 # frozen_string_literal: true
 
 # Populate a rock dir's hack/ (and patches/ for the chisel-releases flavour)
-# from the shared rocks/hack + rocks/patches.
+# from the shared sources, so each rock dir is hand-maintained in one place.
 #
 # rockcraft only copies the project dir (the one with rockcraft.yaml) into the
 # build instance, so each rock needs its own physical copy of the shared files
-# at pack time. The per-dir copies are gitignored and regenerated from here --
-# rocks/hack + rocks/patches are the single source of truth.
+# at pack time. The per-dir copies are gitignored and regenerated from here.
+#
+# Sources:
+#   - repo-root hack/ + patches/chisel -- shared with the docker-image build,
+#     sourced from there rather than duplicated.
+#   - rocks/hack -- rock-specific helpers (incl. a rock-flavoured hash_inputs.sh
+#     that differs from the root one).
 #
 # Usage: ruby sync_shared.rb <rock-dir>
 
 require "fileutils"
 
 ROOT = __dir__
-# the chisel patches are shared with the repo-root docker-image build
-# (hack/build_binaries.sh), so source them from there rather than duplicating.
 REPO_ROOT = File.expand_path("..", ROOT)
 
-# Scripts every rock needs. The chisel-releases flavour also builds chisel +
-# docker from source, so it gets those two extra build scripts + the patches.
-COMMON  = %w[banner.txt bread-warning.sh lazy-apt.sh sshd-entry.sh hash_inputs.sh chisel_cut.sh].freeze
-CR_ONLY = %w[chisel_override_build.sh docker_override_build.sh].freeze
+# Identical to the repo-root copies -> single source there.
+ROOT_HACK = %w[banner.txt bread-warning.sh lazy-apt.sh].freeze
+# Rock-specific (hash_inputs.sh here differs from the root one; the rest are
+# rock-only). The chisel-releases flavour also builds chisel + docker from
+# source, so it gets those two extra build scripts + the patches.
+ROCK_HACK = %w[sshd-entry.sh hash_inputs.sh chisel_cut.sh].freeze
+CR_ONLY   = %w[chisel_override_build.sh docker_override_build.sh].freeze
 
 dir = ARGV[0] or abort "usage: ruby sync_shared.rb <rock-dir>"
 dest = File.join(ROOT, dir)
@@ -30,7 +36,10 @@ abort "no such rock dir: #{dir}" unless File.directory?(dest)
 cr = dir.include?("chisel-releases")
 
 FileUtils.mkdir_p(File.join(dest, "hack"))
-(COMMON + (cr ? CR_ONLY : [])).each do |f|
+ROOT_HACK.each do |f|
+  FileUtils.cp(File.join(REPO_ROOT, "hack", f), File.join(dest, "hack", f), preserve: true)
+end
+(ROCK_HACK + (cr ? CR_ONLY : [])).each do |f|
   FileUtils.cp(File.join(ROOT, "hack", f), File.join(dest, "hack", f), preserve: true)
 end
 
