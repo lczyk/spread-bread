@@ -55,7 +55,9 @@ jobs:
         run: ruby rocks/sync_shared.rb ${{ matrix.dir }}
 
       - name: Pack rock
-        uses: canonical/craft-actions/rockcraft-pack@main
+        # TRIAL: node24 migration from canonical/craft-actions#59 (fork branch).
+        # revert to canonical/craft-actions/rockcraft-pack@main once that merges.
+        uses: dariofaccin/craft-actions/rockcraft-pack@feat/rockcraft-pack-node24
         with:
           path: rocks/${{ matrix.dir }}
           verbosity: brief
