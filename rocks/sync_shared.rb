@@ -14,6 +14,9 @@
 require "fileutils"
 
 ROOT = __dir__
+# the chisel patches are shared with the repo-root docker-image build
+# (hack/build_binaries.sh), so source them from there rather than duplicating.
+REPO_ROOT = File.expand_path("..", ROOT)
 
 # Scripts every rock needs. The chisel-releases flavour also builds chisel +
 # docker from source, so it gets those two extra build scripts + the patches.
@@ -34,7 +37,7 @@ end
 if cr
   chisel = File.join(dest, "patches", "chisel")
   FileUtils.mkdir_p(chisel)
-  Dir[File.join(ROOT, "patches", "chisel", "*.patch")].each do |p|
+  Dir[File.join(REPO_ROOT, "patches", "chisel", "*.patch")].each do |p|
     FileUtils.cp(p, File.join(chisel, File.basename(p)), preserve: true)
   end
 end
