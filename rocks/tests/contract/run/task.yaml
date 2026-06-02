@@ -33,14 +33,14 @@ execute: |
   command -v bash >/dev/null || { echo "missing bash"; exit 1; }
   command -v ls   >/dev/null || { echo "missing coreutils (ls)"; exit 1; }
 
-  # --- bread-warning banner: files installed + the script prints the banner when
-  # sourced with FORCE. Sourced directly rather than via `bash -l` -- whether a
-  # login shell sources /etc/profile -> profile.d in the chiselled rock is a
-  # separate (cosmetic) hole; this checks the banner machinery itself.
+  # --- bread-warning banner: files installed + the script prints when sourced.
+  # spread's (non-tty) session shell already sourced /etc/profile -> profile.d,
+  # whose silent path exports BREAD_BANNER_SHOWN=1 -- so clear it here, else the
+  # dedupe guard makes the re-source a no-op.
   test -r /etc/profile.d/00-bread-warning.sh || {
       echo "missing /etc/profile.d/00-bread-warning.sh"; exit 1; }
   test -r /etc/bread-banner.txt || { echo "missing /etc/bread-banner.txt"; exit 1; }
-  out=$(BREAD_BANNER_FORCE=1 bash -c '. /etc/profile.d/00-bread-warning.sh' 2>&1)
+  out=$(BREAD_BANNER_SHOWN= BREAD_BANNER_FORCE=1 bash -c '. /etc/profile.d/00-bread-warning.sh' 2>&1)
   case "$out" in
       *"INSECURE TEST IMAGE"*) : ;;
       *) echo "banner did not print when sourced"; echo "--- $out ---"; exit 1 ;;
