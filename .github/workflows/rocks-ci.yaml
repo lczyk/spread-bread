@@ -51,6 +51,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Sync shared hack/ + patches/ into the rock dir
+        run: ruby rocks/sync_shared.rb ${{ matrix.dir }}
+
       - name: Pack rock
         uses: canonical/craft-actions/rockcraft-pack@main
         with:
