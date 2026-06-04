@@ -46,7 +46,7 @@ jobs:
               buildah login --username "${{ github.actor }}" \
                   --password-stdin "$REGISTRY"
 
-      - name: Stitch multiarch manifests + push for signing
+      - name: Stitch multiarch manifests + push
         run: |
           set -e
           for flavour in bread bread-chisel-releases; do
@@ -59,6 +59,7 @@ jobs:
                 "docker-archive:arm64/$flavour-$ver-arm64.tar"
               buildah manifest push --format oci --all "$m" \
                 "docker://$REGISTRY/${{ github.repository }}/$flavour:$ver"
+              buildah manifest rm "$m"
             done
           done
 
@@ -81,14 +82,3 @@ jobs:
             done
           done
 
-      - name: Re-push version tags (so they land after cosign sig tags in registry)
-        run: |
-          set -e
-          for flavour in bread bread-chisel-releases; do
-            for ver in 24.04 25.10 26.04; do
-              m="$flavour-$ver-manifest"
-              buildah manifest push --format oci --all "$m" \
-                "docker://$REGISTRY/${{ github.repository }}/$flavour:$ver"
-              buildah manifest rm "$m"
-            done
-          done
