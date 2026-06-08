@@ -1,0 +1,94 @@
+project: chisel-releases
+
+path: /chisel-releases
+
+environment:
+  PROJECT_PATH: /chisel-releases
+  SHARED_LIBRARIES: $PROJECT_PATH/tests/spread/lib
+  PATH: /snap/bin:$PATH:$SHARED_LIBRARIES
+  CHISEL_HACKS: "1"
+
+exclude:
+  - .git
+  - .github
+  - .vscode
+  - work
+  - rootfs
+
+backends:
+  docker:
+    type: adhoc
+    allocate: |
+      #spellchecker: ignore noninteractice
+
+      set -e
+
+      ver=$(echo "$SPREAD_SYSTEM" | cut -d- -f2)   # e.g., ubuntu-24.04-amd64 -> 24.04
+      arch=$(echo "$SPREAD_SYSTEM" | cut -d- -f3)  # e.g., ubuntu-24.04-amd64 -> amd64
+      echo "ver: $ver"
+      echo "arch: $arch"
+
+      image="ghcr.io/lczyk/spread-bread/bread-chisel-releases:$ver"
+      echo "image: $image"
+
+      sleep 0.$RANDOM  # Minimize chances of a race condition
+      export counter_file=".spread-worker-num"
+      instance_num=$(
+          flock -x $counter_file bash -c '
+          [ -s $counter_file ] || echo 0 > $counter_file
+          num=$(< $counter_file) && echo $num
+          echo $(( $num + 1 )) > $counter_file'
+      )
+
+      container_name="bread-chisel-releases-${ver}-${arch}-${instance_num}"
+      echo "container_name: $container_name"
+
+      docker run \
+          --rm \
+          --platform "linux/$arch" \
+          --privileged \
+          -v /var/run/docker.sock:/var/run/docker.sock \
+          -e DEBIAN_FRONTEND=noninteractice \
+          -e "usr=$SPREAD_SYSTEM_USERNAME" \
+          -e "pass=$SPREAD_SYSTEM_PASSWORD" \
+          --name "$container_name" \
+          -d "$image"
+
+      until docker exec "$container_name" pgrep sshd; do sleep 1; done
+
+      ADDRESS "$(docker inspect "$container_name" --format '{{.NetworkSettings.Networks.bridge.IPAddress}}')"
+    discard: |
+      #!/bin/bash
+
+      set -e
+
+      echo "Discarding container for system: $SPREAD_SYSTEM_ADDRESS"
+
+      container_name=""
+      for cid in $(docker ps -a --filter "network=bridge" --format '{{.ID}}'); do
+          cname=$(docker inspect "$cid" --format '{{.Name}}' | sed 's/^\/\(.*\)/\1/')
+          cip=$(docker inspect "$cid" --format '{{.NetworkSettings.Networks.bridge.IPAddress}}' || echo "")
+          if [ "$cip" == "$SPREAD_SYSTEM_ADDRESS" ]; then
+              container_name="$cname"
+              break
+          fi
+      done
+
+      if [ -n "$container_name" ]; then
+          echo "Removing container: $container_name"
+          docker rm -f "$container_name" 2>/dev/null || true
+      else
+          echo "No container found with IP address: $SPREAD_SYSTEM_ADDRESS"
+          exit 1
+      fi
+    systems:
+      - ubuntu-26.10-amd64:
+          password: bread
+          workers: 4
+      - ubuntu-26.10-arm64:
+          password: bread
+          workers: 4
+
+suites:
+  tests/spread/integration/:
+    summary: Tests common scenarios

@@ -1,0 +1,35 @@
+# Bread image: Ubuntu 26.10 + sshd only.
+
+# NOTE: unlike the other versions (which pull docker.io/library/ubuntu:<ver>),
+# 26.10 is an interim release not published to docker hub yet, so we pull from
+# the Canonical-maintained ECR public mirror instead.
+FROM public.ecr.aws/ubuntu/ubuntu:26.10
+
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server && \
+    mkdir /var/run/sshd || true && \
+    echo 'root:bread' | chpasswd && \
+    echo "PermitRootLogin yes" >> /etc/ssh/sshd_config && \
+    echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Replace /etc/pam.d/sshd with a pam_permit-only stack. These images are
+# throwaway test containers; we don't care about password validity, and the
+# default pam_unix stack pulls in unix_chkpwd which can fail to load
+# libcrypt.so.1 inside privileged containers on some hosts.
+RUN printf '%s\n' \
+    'auth     required pam_permit.so' \
+    'account  required pam_permit.so' \
+    'session  required pam_permit.so' \
+    'password required pam_permit.so' \
+    > /etc/pam.d/sshd
+
+# Insecure-image warning. Prints on interactive logins (ssh, `docker exec -it`).
+# See hack/bread-warning.sh for design notes.
+COPY hack/banner.txt        /etc/bread-banner.txt
+COPY hack/bread-warning.sh  /etc/profile.d/00-bread-warning.sh
+RUN chmod 0644 /etc/bread-banner.txt /etc/profile.d/00-bread-warning.sh && \
+    printf '\n# bread-warning\n[ -r /etc/profile.d/00-bread-warning.sh ] && . /etc/profile.d/00-bread-warning.sh\n' >> /root/.bashrc
+
+EXPOSE 22
+CMD ["/usr/sbin/sshd", "-D"]

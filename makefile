@@ -13,7 +13,7 @@ GO_BUILDER_IMAGE := ubuntu/go:1.25-26.04_edge
 DOCKER_VERSION := 29.5.2
 
 # Full matrix.
-VERSIONS := 24.04 25.10 26.04
+VERSIONS := 24.04 25.10 26.04 26.10
 ARCHES   := amd64 arm64
 
 # Optional narrowing via env vars, e.g.:
