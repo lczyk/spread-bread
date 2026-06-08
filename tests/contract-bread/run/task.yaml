@@ -4,6 +4,7 @@ variants:
   - v24_04
   - v25_10
   - v26_04
+  - v26_10
 
 execute: |
   set -e
