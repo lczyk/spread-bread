@@ -102,6 +102,7 @@ suites:
       INLINED/v24_04: $REPO/inlined/bread-24.04.yaml
       INLINED/v25_10: $REPO/inlined/bread-25.10.yaml
       INLINED/v26_04: $REPO/inlined/bread-26.04.yaml
+      INLINED/v26_10: $REPO/inlined/bread-26.10.yaml
 
   contract-bread-chisel-releases/:
     summary: bread-chisel-releases image contract
@@ -109,3 +110,4 @@ suites:
       INLINED/v24_04: $REPO/inlined/bread-chisel-releases-24.04.yaml
       INLINED/v25_10: $REPO/inlined/bread-chisel-releases-25.10.yaml
       INLINED/v26_04: $REPO/inlined/bread-chisel-releases-26.04.yaml
+      INLINED/v26_10: $REPO/inlined/bread-chisel-releases-26.10.yaml

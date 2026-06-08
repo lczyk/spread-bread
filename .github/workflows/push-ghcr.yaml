@@ -50,7 +50,7 @@ jobs:
         run: |
           set -e
           for flavour in bread bread-chisel-releases; do
-            for ver in 24.04 25.10 26.04; do
+            for ver in 24.04 25.10 26.04 26.10; do
               m="$flavour-$ver-manifest"
               buildah manifest create "$m"
               buildah manifest add --arch amd64 "$m" \
@@ -76,7 +76,7 @@ jobs:
         run: |
           set -e
           for flavour in bread bread-chisel-releases; do
-            for ver in 24.04 25.10 26.04; do
+            for ver in 24.04 25.10 26.04 26.10; do
               cosign sign --yes \
                 "$REGISTRY/${{ github.repository }}/$flavour:$ver"
             done
