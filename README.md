@@ -11,7 +11,11 @@ because it rhymes 🤷🏻‍♀️
 
 prebuilt docker images + ready-to-use spread yamls so you can drop Canonical [`spread`](https://github.com/canonical/spread) into any project without writing a backend or maintaining test infra. images live on ghcr as multiarch manifests; per-version yamls live as github release assets.
 
-here is this project's pet bread:
+
+> [!WARNING]
+> This project has many footguns. The test containers are run with no authentication and in --privilideged mode. Make sure you know what you are doing.
+
+anyway, here is this project's pet bread:
 
 ```
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣴⣶⣿
