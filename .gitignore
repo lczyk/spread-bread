@@ -1,6 +1,6 @@
 .spread-worker-lock
 .spread-worker-num
-.spread-reuse.yaml
+.spread-reuse*.yaml
 .stamp/
 cache/
 __pycache__/

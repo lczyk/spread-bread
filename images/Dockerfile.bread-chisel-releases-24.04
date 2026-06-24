@@ -16,10 +16,12 @@ RUN apt-get update && \
         skopeo iproute2 && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-COPY cache/binaries/chisel-${BUILD_ARCH}        /usr/local/bin/chisel
 COPY cache/binaries/chisel-hacked-${BUILD_ARCH} /usr/local/bin/chisel-hacked
 COPY cache/binaries/docker-${BUILD_ARCH}        /usr/local/bin/docker
-RUN chmod +x /usr/local/bin/chisel /usr/local/bin/chisel-hacked /usr/local/bin/docker
+# NOTE: ship only the hacked chisel; `chisel` is a symlink to it so bare
+# `chisel` invocations (e.g. the spread install-slices lib) pick up CHISEL_HACKS.
+RUN chmod +x /usr/local/bin/chisel-hacked /usr/local/bin/docker && \
+    ln -s chisel-hacked /usr/local/bin/chisel
 
 # Lazy-apt shim: auto-runs apt-get update on first non-update apt/apt-get call,
 # then self-destructs so subsequent calls hit real apt directly.

@@ -26,6 +26,11 @@ SELECTED_VERS   := $(if $(strip $(VER)),$(VER),$(VERSIONS))
 SELECTED_ARCHES := $(if $(strip $(ARCH)),$(ARCH),$(ARCHES))
 SELECTED_VER_ARCH := $(foreach v,$(SELECTED_VERS),$(foreach a,$(SELECTED_ARCHES),$(v)-$(a)))
 
+# Host-arch detection (uname -m -> docker arch name). SELECTED_ARCH defaults to
+# the host arch but honours an explicit ARCH=... override.
+HOST_ARCH   := $(shell uname -m | sed -e 's/^x86_64$$/amd64/' -e 's/^aarch64$$/arm64/')
+SELECTED_ARCH := $(if $(strip $(ARCH)),$(ARCH),$(HOST_ARCH))
+
 # Full (non-narrowed) matrix used by `clean` so it nukes everything.
 FULL_VER_ARCH := $(foreach v,$(VERSIONS),$(foreach a,$(ARCHES),$(v)-$(a)))
 
@@ -59,6 +64,23 @@ build-bread-chisel-releases: $(CHISEL_STAMPS)  ## Build bread-chisel-releases im
 
 .PHONY: build-bread-test
 build-bread-test: $(BREAD_TEST_STAMPS)  ## Build the bread-test (26.04 only, both arches) test-host image
+
+# Run the contract/integration spread suite (tests/spread.yaml). Builds the
+# test-host image + inlined yamls first. Pass extra spread args via SPREAD_ARGS,
+# e.g. make test SPREAD_ARGS='-debug'.
+SPREAD_ARGS ?=
+# The contract-bread-chisel-releases run task allocates the per-version
+# bread-chisel-releases:<ver>-<arch> images via the host docker socket, so all
+# four versions (host arch) must exist before the suite runs.
+# List the bread base stamps explicitly (not just via the chisel-releases
+# prereq) so make builds them as direct goals -- the .stamp/bread-% pattern
+# also matches bread-chisel-releases-%, so chained-implicit base builds are
+# unreliable.
+TEST_STAMPS := .stamp/bread-test-26.04-$(SELECTED_ARCH) \
+	$(foreach v,$(VERSIONS),.stamp/bread-$(v)-$(SELECTED_ARCH) .stamp/bread-chisel-releases-$(v)-$(SELECTED_ARCH))
+.PHONY: test
+test: $(TEST_STAMPS) inlined-yaml-files  ## Run the spread test suite (host arch; ARCH=... to override, SPREAD_ARGS=... for flags)
+	cd tests && spread $(SPREAD_ARGS) outer:ubuntu-26.04-$(SELECTED_ARCH)
 
 .PHONY: check-base
 check-base:  ## Report upstream ubuntu base-image digest drift (non-zero exit on drift)
@@ -120,15 +142,16 @@ inlined/%.yaml: templates/%.yaml.in hack/inline_scripts.rb $(SCRIPTS)
 	@mkdir -p inlined
 	ruby hack/inline_scripts.rb $< $@
 
-# Host-arch detection for `make shell` (uname -m -> docker arch name).
-HOST_ARCH  := $(shell uname -m | sed -e 's/^x86_64$$/amd64/' -e 's/^aarch64$$/arm64/')
-SHELL_ARCH := $(if $(strip $(ARCH)),$(ARCH),$(HOST_ARCH))
-
 .PHONY: shell
-shell: .stamp/bread-26.04-$(SHELL_ARCH)  ## Drop into a bread:26.04 shell (host arch). Override via ARCH=...
+shell: .stamp/bread-26.04-$(SELECTED_ARCH)  ## Drop into a bread:26.04 shell (host arch). Override via ARCH=...
 	$(DOCKER) run --rm -it \
-		--platform "linux/$(SHELL_ARCH)" \
-		bread:26.04-$(SHELL_ARCH) bash
+		--platform "linux/$(SELECTED_ARCH)" \
+		bread:26.04-$(SELECTED_ARCH) bash
+
+.PHONY: nuke-spread
+nuke-spread:  ## Kill stray spread processes + force-remove bread containers
+	-pkill spread
+	-$(DOCKER) ps | grep bread | cut -d' ' -f1 | xargs -r $(DOCKER) rm --force
 
 .PHONY: clean
 clean:  ## Remove built images, stamps, generated inlined yamls, cached binaries
