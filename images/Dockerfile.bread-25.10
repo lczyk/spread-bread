@@ -1,6 +1,6 @@
 # Bread image: Ubuntu 25.10 + sshd only.
 
-FROM docker.io/library/ubuntu:25.10
+FROM docker.io/library/ubuntu:25.10@sha256:4a9232cc47bf99defcc8860ef6222c99773330367fcecbf21ba2edb0b810a31e
 
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server && \
