@@ -5,6 +5,7 @@
 [![ghcr bread](https://img.shields.io/badge/ghcr-bread-blue?logo=docker)](https://github.com/lczyk/spread-bread/pkgs/container/spread-bread%2Fbread)
 [![ghcr bread-chisel-releases](https://img.shields.io/badge/ghcr-bread--chisel--releases-blue?logo=docker)](https://github.com/lczyk/spread-bread/pkgs/container/spread-bread%2Fbread-chisel-releases)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-E95420?logo=ubuntu&logoColor=white)](#)
+[![bread](https://img.shields.io/badge/%F0%9F%8D%9E-bread-fb83ac)](https://github.com/lczyk/spread-bread/releases/latest)
 
 because it rhymes 🤷🏻‍♀️
 
@@ -85,6 +86,7 @@ spread-bread/
     build_binaries.sh            # cross-compile chisel + spread, fetch docker static, in one ubuntu/go builder
     build_image.sh               # per-image build w/ hash-stamp short-circuit
     hash_inputs.sh               # per-image input hash (drives stamp invalidation)
+    check_base.sh                # detect upstream ubuntu base digest drift; rewrite @sha256 pins
     inline_scripts.rb            # splice scripts/*.sh into yaml templates
   scripts/                       # allocate / discard scripts, one pair per flavour
   images/                        # one Dockerfile per (flavour, ubuntu version)
@@ -100,7 +102,7 @@ spread-bread/
     Dockerfile.bread-test-26.04  # test-host image: bread:26.04 + docker + spread (not published)
     contract-{bread,bread-chisel-releases}/run/task.yaml
     _inner-{bread,bread-chisel-releases}/contract/task.yaml
-  .github/workflows/             # ci (build + test) on PR / push to main; release on r* tag
+  .github/workflows/             # ci (build + test) on PR / push to main; release on r* tag; daily base-refresh
 ```
 
 ## using (contributor / dev)
