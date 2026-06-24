@@ -60,6 +60,14 @@ build-bread-chisel-releases: $(CHISEL_STAMPS)  ## Build bread-chisel-releases im
 .PHONY: build-bread-test
 build-bread-test: $(BREAD_TEST_STAMPS)  ## Build the bread-test (26.04 only, both arches) test-host image
 
+.PHONY: check-base
+check-base:  ## Report upstream ubuntu base-image digest drift (non-zero exit on drift)
+	@hack/check_base.sh --check
+
+.PHONY: update-base
+update-base:  ## Rewrite base Dockerfile @sha256 pins to the current upstream digests
+	@hack/check_base.sh --write
+
 # Demo runs only on LTS versions (24.04, 26.04) x both arches, regardless of VER/ARCH narrowing.
 DEMO_STAMPS := $(foreach a,$(ARCHES),.stamp/bread-24.04-$(a) .stamp/bread-26.04-$(a))
 

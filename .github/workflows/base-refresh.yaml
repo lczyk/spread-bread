@@ -1,0 +1,80 @@
+name: Base refresh
+
+# Daily check for upstream ubuntu base-image digest drift. The bread base
+# Dockerfiles pin their FROM by @sha256 (the manifest-list digest); canonical
+# re-publishes ubuntu:<ver> under the same tag on every security rebuild,
+# moving that digest. When any base moves, `make update-base` rewrites the
+# pin(s) and this job opens (or updates) a single PR.
+#
+# The pin lives in images/Dockerfile.bread-<ver>, which hack/hash_inputs.sh
+# already hashes, so merging the PR busts the bread stamp and forces a real
+# rebuild on the next build (bread-chisel-releases + bread-test cascade).
+#
+# Publishing stays a maintainer step: after merge, push an r<N> tag to fire
+# release.yaml.
+#
+# Pushes + PRs use the lczyk-bot PAT (secrets.BOT_PAT), not the default
+# GITHUB_TOKEN -- a real account's token, so the bump PR DOES trigger ci.yaml
+# (github only suppresses recursive runs for GITHUB_TOKEN). the bot is a
+# write collaborator; the classic PAT needs `repo` scope (or `public_repo`
+# if the repo is public).
+
+on:
+  schedule:
+    - cron: '17 6 * * *'  # daily, off-the-hour
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          token: ${{ secrets.BOT_PAT }}
+
+      - name: Resolve + rewrite drifted base pins
+        run: make update-base | tee /tmp/base-refresh.log
+
+      - name: Open / update PR on drift
+        env:
+          GH_TOKEN: ${{ secrets.BOT_PAT }}
+        run: |
+          set -e
+          if git diff --quiet -- images/; then
+            echo "no drift; nothing to do"
+            exit 0
+          fi
+
+          git config user.name  "lczyk-bot"
+          git config user.email "lczyk-bot@users.noreply.github.com"
+
+          branch=base-refresh
+          git switch -C "$branch"
+          git commit -am "chore: bump ubuntu base digests"
+          git push -f origin "$branch"
+
+          drift=$(grep ': drift ' /tmp/base-refresh.log || true)
+          {
+            echo "automated upstream ubuntu base-image digest bump."
+            echo "drift detected:"
+            echo
+            echo "$drift"
+            echo
+            echo "merge to land the new pins, then push an \`r<N>\` tag"
+            echo "to publish."
+          } > /tmp/pr-body.md
+
+          if gh pr view "$branch" >/dev/null 2>&1; then
+            echo "PR already open for $branch; branch updated"
+          else
+            gh pr create --base main --head "$branch" \
+              --title "chore: bump ubuntu base digests" \
+              --body-file /tmp/pr-body.md
+          fi
