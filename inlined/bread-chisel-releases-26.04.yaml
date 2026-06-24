@@ -6,7 +6,10 @@ environment:
   PROJECT_PATH: /chisel-releases
   SHARED_LIBRARIES: $PROJECT_PATH/tests/spread/lib
   PATH: /snap/bin:$PATH:$SHARED_LIBRARIES
-  CHISEL_HACKS: "1"
+  # NOTE: empty by default; opt in per-run with `CHISEL_HACKS=1 spread ...`.
+  # $(HOST:...) forwards the host env var into the remote (spread sends only
+  # vars declared here, not the ambient host env).
+  CHISEL_HACKS: "$(HOST: echo $CHISEL_HACKS)"
 
 exclude:
   - .git
