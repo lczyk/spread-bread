@@ -13,7 +13,7 @@ prebuilt docker images + ready-to-use spread yamls so you can drop Canonical [`s
 
 
 > [!WARNING]
-> This project has many footguns. The test containers are run with no authentication and in --privilideged mode. Make sure you know what you are doing.
+> This project has many footguns. The test containers are run with no authentication and in --privileged mode. Make sure you know what you are doing.
 
 anyway, here is this project's pet bread:
 
