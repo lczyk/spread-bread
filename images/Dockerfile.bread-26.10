@@ -1,9 +1,6 @@
 # Bread image: Ubuntu 26.10 + sshd only.
 
-# NOTE: unlike the other versions (which pull docker.io/library/ubuntu:<ver>),
-# 26.10 is an interim release not published to docker hub yet, so we pull from
-# the Canonical-maintained ECR public mirror instead.
-FROM public.ecr.aws/ubuntu/ubuntu:26.10
+FROM docker.io/library/ubuntu:26.10@sha256:c397f5aeae1d761068ccca300c50ab7de4ec1aaafee5e399d81ec2634f94082f
 
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server && \
