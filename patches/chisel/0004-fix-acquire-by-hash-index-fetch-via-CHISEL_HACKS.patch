@@ -1,133 +1,207 @@
-From 713c2a262882bcac18ef48cdf8edd1e4afbeb688 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: lczyk <marcin.konowalczyk@canonical.com>
 Date: Mon, 1 Jun 2026 21:38:54 +0100
 Subject: [PATCH] fix: acquire-by-hash index fetch via CHISEL_HACKS
 
-when CHISEL_HACKS is set and the archive advertises Acquire-By-Hash: yes,
-fetch Packages.gz via the content-addressed by-hash URL before falling
-back to the canonical named path. avoids intermittent digest-mismatch
-errors during mid-publication archive updates where the canonical path
-briefly serves stale content while InRelease already reflects new digests.
+based on canonical/chisel#296. when CHISEL_HACKS=1 is set and the archive
+advertises Acquire-By-Hash: yes, fetch Packages.gz via the content-addressed
+by-hash URL before falling back to the canonical named path. avoids
+intermittent digest-mismatch errors during mid-publication archive updates
+where the canonical path briefly serves stale content while InRelease already
+reflects new digests.
 ---
- internal/archive/archive.go                 |  41 +++++++-
- internal/archive/archive_test.go            | 101 ++++++++++++++++++++
- internal/archive/testarchive/testarchive.go |  33 ++++---
- 3 files changed, 160 insertions(+), 15 deletions(-)
-
 diff --git a/internal/archive/archive.go b/internal/archive/archive.go
-index e24a9c2..6c9c62f 100644
+index e24a9c2..70379ae 100644
 --- a/internal/archive/archive.go
 +++ b/internal/archive/archive.go
-@@ -2,10 +2,13 @@ package archive
- 
- import (
- 	"compress/gzip"
-+	"errors"
- 	"fmt"
+@@ -6,6 +6,7 @@ import (
  	"io"
  	"net/http"
  	"net/url"
 +	"os"
-+	"path"
  	"slices"
  	"strings"
  	"time"
-@@ -65,6 +68,7 @@ type fetchFlags uint
+@@ -64,10 +65,13 @@ func Open(options *Options) (Archive, error) {
+ type fetchFlags uint
  
  const (
- 	fetchBulk    fetchFlags = 1 << iota
+-	fetchBulk    fetchFlags = 1 << iota
++	fetchBulk fetchFlags = 1 << iota
 +	fetchGzip
  	fetchDefault fetchFlags = 0
  )
  
-@@ -80,6 +84,9 @@ var bulkClient = &http.Client{
- 
- var bulkDo = bulkClient.Do
- 
-+// errArchiveNotFound is returned by fetch when the server responds with 404.
-+var errArchiveNotFound = errors.New("cannot find archive data")
++var errNotFound = fmt.Errorf("cannot find archive data")
 +
- type ubuntuArchive struct {
- 	options Options
- 	indexes []*ubuntuIndex
-@@ -334,10 +341,31 @@ func (index *ubuntuIndex) fetchIndex() error {
+ var httpClient = &http.Client{
+ 	Timeout: 30 * time.Second,
+ }
+@@ -326,17 +330,40 @@ func (index *ubuntuIndex) fetchRelease() error {
+ }
+ 
+ func (index *ubuntuIndex) fetchIndex() error {
+-	digests := index.release.Get("SHA256")
++	releaseDigests := index.release.Get("SHA256")
+ 	packagesPath := fmt.Sprintf("%s/binary-%s/Packages", index.component, index.arch)
+-	digest, _, _ := control.ParsePathInfo(digests, packagesPath)
+-	if digest == "" {
++	packagesDigest, _, _ := control.ParsePathInfo(releaseDigests, packagesPath)
++	if packagesDigest == "" {
+ 		return fmt.Errorf("%s is missing from %s %s component digests", packagesPath, index.suite, index.component)
  	}
  
  	logf("Fetching index for %s %s %s %s component...", index.displayName(), index.version, index.suite, index.component)
 -	reader, err := index.fetch(index.distPath(packagesPath+".gz"), digest, fetchBulk)
+-	if err != nil {
+-		return err
 +
-+	gzPackagesPath := packagesPath + ".gz"
-+	candidates := []string{index.distPath(gzPackagesPath)}
-+	// NOTE: CHISEL_HACKS enables Acquire-By-Hash to avoid digest mismatches
-+	// during mid-publication archive updates, where the canonical path may
-+	// briefly serve stale content while InRelease already reflects new digests.
-+	if os.Getenv("CHISEL_HACKS") != "" && index.release.Get("Acquire-By-Hash") == "yes" {
-+		gzDigest, _, _ := control.ParsePathInfo(digests, gzPackagesPath)
-+		if gzDigest != "" {
-+			candidates = append([]string{byHashPath(index.distPath(gzPackagesPath), gzDigest)}, candidates...)
-+		}
-+	}
-+
++	// Prefer acquire-by-hash when the archive advertises it and CHISEL_HACKS=1
++	// is set. By-hash URLs are content-addressed and so are immune to the
++	// inconsistent view of InRelease vs Packages.gz that mirrors and CDNs can
++	// serve while a publication is propagating. See https://wiki.ubuntu.com/AptByHash.
++	packagesGzPath := packagesPath + ".gz"
 +	var reader io.ReadSeekCloser
-+	var err error
-+	for _, candidate := range candidates {
-+		reader, err = index.fetch(candidate, digest, fetchBulk|fetchGzip)
-+		if err == nil || !errors.Is(err, errArchiveNotFound) {
-+			break
++	if os.Getenv("CHISEL_HACKS") == "1" && index.release.Get("Acquire-By-Hash") == "yes" {
++		packagesGzDigest, _, _ := control.ParsePathInfo(releaseDigests, packagesGzPath)
++		if packagesGzDigest != "" {
++			packagesByHashPath := fmt.Sprintf("%s/binary-%s/by-hash/SHA256/%s", index.component, index.arch, packagesGzDigest)
++			r, err := index.fetch(index.distPath(packagesByHashPath), packagesDigest, fetchBulk|fetchGzip)
++			if err != nil && err != errNotFound {
++				return err
++			}
++			// On 404 fall through to the named-path fetch below: the hash
++			// may have been garbage-collected on the mirror.
++			reader = r
 +		}
 +	}
- 	if err != nil {
- 		return err
++	if reader == nil {
++		r, err := index.fetch(index.distPath(packagesGzPath), packagesDigest, fetchBulk|fetchGzip)
++		if err != nil {
++			return err
++		}
++		reader = r
  	}
-+
  	ctrl, err := control.ParseReader("Package", reader)
  	if err != nil {
- 		return fmt.Errorf("parsing archive Package file: %v", err)
-@@ -347,6 +375,13 @@ func (index *ubuntuIndex) fetchIndex() error {
- 	return nil
- }
- 
-+// byHashPath transforms a dist-relative path like
-+// "dists/jammy/main/binary-amd64/Packages.gz" into a by-hash URL
-+// "dists/jammy/main/binary-amd64/by-hash/SHA256/<digest>".
-+func byHashPath(p, digest string) string {
-+	return path.Join(path.Dir(p), "by-hash", "SHA256", digest)
-+}
-+
- // supportsArch returns true if the Architectures field in the index release
- // contains "arch". Per the Debian wiki [1], index release files should list the
- // supported architectures in the "Architectures" field.
-@@ -410,13 +445,13 @@ func (index *ubuntuIndex) fetch(path, digest string, flags fetchFlags) (io.ReadS
+@@ -410,13 +437,13 @@ func (index *ubuntuIndex) fetch(path, digest string, flags fetchFlags) (io.ReadS
  	case 401:
  		return nil, fmt.Errorf("cannot fetch from %q: unauthorized", index.label)
  	case 404:
 -		return nil, fmt.Errorf("cannot find archive data")
-+		return nil, errArchiveNotFound
++		return nil, errNotFound
  	default:
  		return nil, fmt.Errorf("error from archive: %v", resp.Status)
  	}
  
  	body := resp.Body
 -	if strings.HasSuffix(path, ".gz") {
-+	if flags&fetchGzip != 0 || strings.HasSuffix(path, ".gz") {
++	if flags&fetchGzip != 0 {
  		reader, err := gzip.NewReader(body)
  		if err != nil {
  			return nil, fmt.Errorf("cannot decompress data: %v", err)
 diff --git a/internal/archive/archive_test.go b/internal/archive/archive_test.go
-index 8ca840e..14d332e 100644
+index 8ca840e..2771546 100644
 --- a/internal/archive/archive_test.go
 +++ b/internal/archive/archive_test.go
-@@ -617,6 +617,107 @@ func (s *httpSuite) TestPackageInfo(c *C) {
- 	}
+@@ -22,19 +22,25 @@ import (
+ 	"github.com/canonical/chisel/internal/testutil"
+ )
+ 
++type requestResult struct {
++	path   string
++	status int
++}
++
+ type httpSuite struct {
+-	logf      func(string, ...any)
+-	base      string
+-	request   *http.Request
+-	requests  []*http.Request
+-	response  string
+-	responses map[string][]byte
+-	err       error
+-	header    http.Header
+-	status    int
+-	restore   func()
+-	privKey   *packet.PrivateKey
+-	pubKey    *packet.PublicKey
++	logf           func(string, ...any)
++	base           string
++	request        *http.Request
++	requests       []*http.Request
++	requestResults []requestResult
++	response       string
++	responses      map[string][]byte
++	err            error
++	header         http.Header
++	status         int
++	restore        func()
++	privKey        *packet.PrivateKey
++	pubKey         *packet.PublicKey
  }
  
-+func (s *httpSuite) TestAcquireByHash(c *C) {
-+	restoreEnv := fakeEnv("CHISEL_HACKS", "1")
-+	defer restoreEnv()
+ var _ = Suite(&httpSuite{})
+@@ -54,6 +60,7 @@ func (s *httpSuite) SetUpTest(c *C) {
+ 	s.base = "http://archive.ubuntu.com/ubuntu/"
+ 	s.request = nil
+ 	s.requests = nil
++	s.requestResults = nil
+ 	s.response = ""
+ 	s.responses = make(map[string][]byte)
+ 	s.header = nil
+@@ -83,14 +90,19 @@ func (s *httpSuite) Do(req *http.Request) (*http.Response, error) {
+ 	s.request = req
+ 	s.requests = append(s.requests, req)
+ 	body := s.response
++	status := s.status
+ 	s.logf("Request: %s", req.URL.String())
+ 	if response, ok := s.responses[path.Clean(req.URL.Path)]; ok {
+ 		body = string(response)
++	} else if len(s.responses) > 0 && s.status == 200 {
++		// Unknown path with responses populated: behave like a real archive.
++		status = 404
+ 	}
++	s.requestResults = append(s.requestResults, requestResult{path: req.URL.Path, status: status})
+ 	rsp := &http.Response{
+ 		Body:       io.NopCloser(strings.NewReader(body)),
+ 		Header:     s.header,
+-		StatusCode: s.status,
++		StatusCode: status,
+ 	}
+ 	return rsp, s.err
+ }
+@@ -625,6 +637,130 @@ func read(r io.Reader) string {
+ 	return string(data)
+ }
+ 
++// fetchRequestStatus checks whether a request was made whose URL path
++// contains the given substring. If so, it returns true and the HTTP status
++// code from the most recent matching request. If not, it returns false, 0.
++func (s *httpSuite) fetchRequestStatus(pathSubstring string) (bool, int) {
++	for i := len(s.requestResults) - 1; i >= 0; i-- {
++		if strings.Contains(s.requestResults[i].path, pathSubstring) {
++			return true, s.requestResults[i].status
++		}
++	}
++	return false, 0
++}
++
++func (s *httpSuite) TestFetchByHashSucceedsWhenNamedPathIsStale(c *C) {
++	restore := fakeEnv("CHISEL_HACKS", "1")
++	defer restore()
 +
 +	s.prepareArchiveAdjustRelease("jammy", "22.04", "amd64", []string{"main"}, func(r *testarchive.Release) {
-+		r.AcquireByHash = true
++		r.ByHash = true
 +	})
++
++	// Simulate a mirror serving stale content at the named Packages.gz path
++	// while the by-hash path still has the correct data.
++	for p := range s.responses {
++		if strings.Contains(p, "Packages.gz") && !strings.Contains(p, "/by-hash/") {
++			s.responses[p] = testarchive.MakeGzip([]byte("stale Packages from previous publication"))
++		}
++	}
 +
 +	options := archive.Options{
 +		Label:      "ubuntu",
@@ -138,41 +212,36 @@ index 8ca840e..14d332e 100644
 +		CacheDir:   c.MkDir(),
 +		PubKeys:    []*packet.PublicKey{s.pubKey},
 +	}
-+	_, err := archive.Open(&options)
++
++	testArchive, err := archive.Open(&options)
 +	c.Assert(err, IsNil)
 +
-+	var byHashReqs []*http.Request
-+	for _, req := range s.requests {
-+		if strings.Contains(req.URL.Path, "by-hash") {
-+			byHashReqs = append(byHashReqs, req)
-+		}
-+	}
-+	c.Assert(byHashReqs, HasLen, 1)
-+	c.Assert(byHashReqs[0].URL.Path, Matches, `.*/by-hash/SHA256/[0-9a-f]{64}`)
++	pkg, _, err := testArchive.Fetch("mypkg1")
++	c.Assert(err, IsNil)
++	c.Assert(read(pkg), Equals, "mypkg1 1.1 data")
++
++	// The by-hash request must have been attempted and succeeded with 200,
++	// since the named path has stale content and only by-hash has the
++	// correct data.
++	attempted, status := s.fetchRequestStatus("/by-hash/SHA256/")
++	c.Assert(attempted, Equals, true)
++	c.Assert(status, Equals, 200)
 +}
 +
-+func (s *httpSuite) TestAcquireByHashFallback(c *C) {
-+	restoreEnv := fakeEnv("CHISEL_HACKS", "1")
-+	defer restoreEnv()
++func (s *httpSuite) TestFetchByHashFallsBackOnNotFound(c *C) {
++	restore := fakeEnv("CHISEL_HACKS", "1")
++	defer restore()
 +
 +	s.prepareArchiveAdjustRelease("jammy", "22.04", "amd64", []string{"main"}, func(r *testarchive.Release) {
-+		r.AcquireByHash = true
++		r.ByHash = true
 +	})
 +
-+	// Replace FakeDo to return 404 for by-hash URLs, canonical path succeeds normally.
-+	var requests []*http.Request
-+	s.restore()
-+	s.restore = archive.FakeDo(func(req *http.Request) (*http.Response, error) {
-+		requests = append(requests, req)
-+		if strings.Contains(req.URL.Path, "by-hash") {
-+			return &http.Response{
-+				Body:       io.NopCloser(strings.NewReader("")),
-+				Header:     http.Header{},
-+				StatusCode: 404,
-+			}, nil
++	// Simulate a mirror that garbage-collected the by-hash entries.
++	for p := range s.responses {
++		if strings.Contains(p, "/by-hash/") {
++			delete(s.responses, p)
 +		}
-+		return s.Do(req)
-+	})
++	}
 +
 +	options := archive.Options{
 +		Label:      "ubuntu",
@@ -183,27 +252,30 @@ index 8ca840e..14d332e 100644
 +		CacheDir:   c.MkDir(),
 +		PubKeys:    []*packet.PublicKey{s.pubKey},
 +	}
-+	_, err := archive.Open(&options)
++
++	testArchive, err := archive.Open(&options)
 +	c.Assert(err, IsNil)
 +
-+	var sawByHash, sawCanon bool
-+	for _, req := range requests {
-+		if strings.Contains(req.URL.Path, "by-hash") {
-+			sawByHash = true
-+		} else if strings.Contains(req.URL.Path, "Packages.gz") {
-+			c.Assert(sawByHash, Equals, true, Commentf("canonical Packages.gz fetched before by-hash attempt"))
-+			sawCanon = true
-+		}
-+	}
-+	c.Assert(sawByHash, Equals, true)
-+	c.Assert(sawCanon, Equals, true)
++	pkg, _, err := testArchive.Fetch("mypkg1")
++	c.Assert(err, IsNil)
++	c.Assert(read(pkg), Equals, "mypkg1 1.1 data")
++
++	// The by-hash request must have been attempted but got 404 (the hash
++	// was garbage-collected), so we fell back to the named path which
++	// returned 200 with the correct data.
++	attempted, status := s.fetchRequestStatus("/by-hash/SHA256/")
++	c.Assert(attempted, Equals, true)
++	c.Assert(status, Equals, 404)
++	attempted, status = s.fetchRequestStatus("Packages.gz")
++	c.Assert(attempted, Equals, true)
++	c.Assert(status, Equals, 200)
 +}
 +
-+func (s *httpSuite) TestNoAcquireByHashWithoutChiselHacks(c *C) {
-+	// CHISEL_HACKS unset -- by-hash must not be used even if archive advertises it.
-+	s.prepareArchiveAdjustRelease("jammy", "22.04", "amd64", []string{"main"}, func(r *testarchive.Release) {
-+		r.AcquireByHash = true
-+	})
++func (s *httpSuite) TestFetchSkipsByHashWhenNotAdvertised(c *C) {
++	restore := fakeEnv("CHISEL_HACKS", "1")
++	defer restore()
++
++	s.prepareArchive("jammy", "22.04", "amd64", []string{"main"})
 +
 +	options := archive.Options{
 +		Label:      "ubuntu",
@@ -214,85 +286,98 @@ index 8ca840e..14d332e 100644
 +		CacheDir:   c.MkDir(),
 +		PubKeys:    []*packet.PublicKey{s.pubKey},
 +	}
++
 +	_, err := archive.Open(&options)
 +	c.Assert(err, IsNil)
 +
-+	for _, req := range s.requests {
-+		c.Assert(req.URL.Path, Not(Matches), `.*/by-hash/.*`)
-+	}
++	// When by-hash is not advertised, no by-hash request should be
++	// attempted; only the named Packages.gz path is fetched.
++	attempted, _ := s.fetchRequestStatus("/by-hash/SHA256/")
++	c.Assert(attempted, Equals, false)
++	attempted, status := s.fetchRequestStatus("Packages.gz")
++	c.Assert(attempted, Equals, true)
++	c.Assert(status, Equals, 200)
 +}
 +
- func read(r io.Reader) string {
- 	data, err := io.ReadAll(r)
- 	if err != nil {
+ // ----------------------------------------------------------------------------------------
+ // Real archive tests, only enabled via:
+ //   1. --real-archive      for non-Pro archives (e.g. standard jammy archive),
 diff --git a/internal/archive/testarchive/testarchive.go b/internal/archive/testarchive/testarchive.go
-index f51f097..cf6a114 100644
+index f51f097..f48e680 100644
 --- a/internal/archive/testarchive/testarchive.go
 +++ b/internal/archive/testarchive/testarchive.go
-@@ -102,11 +102,12 @@ func (p *Package) Content() []byte {
+@@ -54,7 +54,7 @@ func (gz *Gzip) Section() []byte {
  }
  
- type Release struct {
--	Suite   string
--	Version string
--	Label   string
--	Items   []Item
--	PrivKey *packet.PrivateKey
-+	Suite         string
-+	Version       string
-+	Label         string
-+	Items         []Item
-+	PrivKey       *packet.PrivateKey
-+	AcquireByHash bool
+ func (gz *Gzip) Content() []byte {
+-	return makeGzip(gz.Item.Content())
++	return MakeGzip(gz.Item.Content())
+ }
+ 
+ type Package struct {
+@@ -107,6 +107,9 @@ type Release struct {
+ 	Label   string
+ 	Items   []Item
+ 	PrivKey *packet.PrivateKey
++	// ByHash enables the Acquire-By-Hash flag in the Release file
++	// and renders by-hash URLs alongside named paths.
++	ByHash bool
  }
  
  func (r *Release) Walk(f func(Item) error) error {
-@@ -127,7 +128,11 @@ func (r *Release) Content() []byte {
+@@ -127,6 +130,10 @@ func (r *Release) Content() []byte {
  		content := item.Content()
  		digests.WriteString(fmt.Sprintf(" %s  %d  %s\n", makeSha256(content), len(content), item.Path()))
  	}
--	content := fmt.Sprintf(string(testutil.Reindent(`
 +	acquireByHash := ""
-+	if r.AcquireByHash {
++	if r.ByHash {
 +		acquireByHash = "Acquire-By-Hash: yes\n"
 +	}
-+	header := fmt.Sprintf(string(testutil.Reindent(`
+ 	content := fmt.Sprintf(string(testutil.Reindent(`
  		Origin: Ubuntu
  		Label: %s
- 		Suite: %s
-@@ -137,9 +142,8 @@ func (r *Release) Content() []byte {
+@@ -137,9 +144,9 @@ func (r *Release) Content() []byte {
  		Architectures: amd64 arm64 armhf i386 ppc64el riscv64 s390x
  		Components: main restricted universe multiverse
  		Description: Ubuntu %s
 -		SHA256:
--		%s
++		%sSHA256:
+ 		%s
 -	`)), r.Label, r.Suite, r.Version, r.Version, digests.String())
-+	`)), r.Label, r.Suite, r.Version, r.Version)
-+	content := strings.TrimRight(header, " \t\n") + "\n" + acquireByHash + "SHA256:\n" + digests.String() + "\n"
++	`)), r.Label, r.Suite, r.Version, r.Version, acquireByHash, digests.String())
  
  	var buf bytes.Buffer
  	writer, err := clearsign.Encode(&buf, r.PrivKey, nil)
-@@ -160,12 +164,17 @@ func (r *Release) Content() []byte {
+@@ -160,12 +167,17 @@ func (r *Release) Content() []byte {
  func (r *Release) Render(prefix string, content map[string][]byte) error {
  	return r.Walk(func(item Item) error {
  		itemPath := item.Path()
 +		itemContent := item.Content()
  		if strings.HasPrefix(itemPath, "pool/") {
 -			itemPath = path.Join(prefix, itemPath)
-+			content[path.Join(prefix, itemPath)] = itemContent
- 		} else {
+-		} else {
 -			itemPath = path.Join(prefix, "dists", r.Suite, itemPath)
-+			content[path.Join(prefix, "dists", r.Suite, itemPath)] = itemContent
-+			if r.AcquireByHash && path.Dir(itemPath) != "." {
-+				dir := path.Dir(itemPath)
-+				digest := makeSha256(itemContent)
-+				content[path.Join(prefix, "dists", r.Suite, dir, "by-hash", "SHA256", digest)] = itemContent
-+			}
++			content[path.Join(prefix, itemPath)] = itemContent
++			return nil
++		}
++		distItemPath := path.Join(prefix, "dists", r.Suite, itemPath)
++		content[distItemPath] = itemContent
++		if r.ByHash && itemPath != r.Path() {
++			byHashPath := path.Join(prefix, "dists", r.Suite, path.Dir(itemPath), "by-hash", "SHA256", makeSha256(itemContent))
++			content[byHashPath] = itemContent
  		}
 -		content[itemPath] = item.Content()
  		return nil
  	})
  }
+@@ -204,7 +216,7 @@ func makeSha256(b []byte) string {
+ 	return fmt.Sprintf("%x", sha256.Sum256(b))
+ }
+ 
+-func makeGzip(b []byte) []byte {
++func MakeGzip(b []byte) []byte {
+ 	var buf bytes.Buffer
+ 	gz := gzip.NewWriter(&buf)
+ 	_, err := gz.Write(b)
 -- 
 2.53.0
-
