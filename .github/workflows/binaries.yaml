@@ -1,8 +1,8 @@
 name: Binaries
 
-# Reusable. Cross-compiles chisel + spread (via Canonical's
-# ubuntu/go:1.25-26.04_edge builder) and fetches the upstream docker
-# static CLI for both arches. Uploads cache/binaries/ + the matching
+# Reusable. Cross-compiles chisel + spread + the docker CLI (via
+# Canonical's ubuntu/go:1.25-26.04_edge builder) for all target
+# arches. Uploads cache/binaries/ + the matching
 # .stamp/binaries so downstream jobs can short-circuit any rebuild.
 
 on:

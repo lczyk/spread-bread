@@ -25,3 +25,14 @@ jobs:
   build-and-test:
     needs: binaries
     uses: ./.github/workflows/build-and-test.yaml
+
+  # Also build the qemu-arch images (s390x / ppc64le) so image breakage
+  # surfaces at PR time, not at release. Native arches are excluded --
+  # build-and-test already builds those.
+  build-oci:
+    needs: binaries
+    uses: ./.github/workflows/build-oci.yaml
+    with:
+      matrix: >-
+        [{"runner": "ubuntu-24.04", "arch": "s390x",   "qemu": true},
+         {"runner": "ubuntu-24.04", "arch": "ppc64le", "qemu": true}]

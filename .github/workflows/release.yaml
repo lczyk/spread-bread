@@ -65,15 +65,13 @@ jobs:
           # inlined yamls verbatim
           cp inlined/*.yaml release-out/
 
-          # spread binaries: rename to canonical go-release-style names
-          cp cache/binaries/spread-amd64 release-out/spread-linux-amd64
-          cp cache/binaries/spread-arm64 release-out/spread-linux-arm64
-          chmod +x release-out/spread-linux-*
-
-          # chisel-hacked binaries
-          cp cache/binaries/chisel-hacked-amd64 release-out/chisel-hacked-linux-amd64
-          cp cache/binaries/chisel-hacked-arm64 release-out/chisel-hacked-linux-arm64
-          chmod +x release-out/chisel-hacked-linux-*
+          # spread + chisel-hacked binaries: rename to canonical
+          # go-release-style names
+          for arch in amd64 arm64 s390x ppc64le; do
+            cp "cache/binaries/spread-$arch" "release-out/spread-linux-$arch"
+            cp "cache/binaries/chisel-hacked-$arch" "release-out/chisel-hacked-linux-$arch"
+          done
+          chmod +x release-out/spread-linux-* release-out/chisel-hacked-linux-*
 
           # sha256 sidecars (standard sha256sum format)
           cd release-out
@@ -88,7 +86,7 @@ jobs:
         run: |
           set -e
           cd release-out
-          for f in spread-linux-amd64 spread-linux-arm64 chisel-hacked-linux-amd64 chisel-hacked-linux-arm64; do
+          for f in spread-linux-{amd64,arm64,s390x,ppc64le} chisel-hacked-linux-{amd64,arm64,s390x,ppc64le}; do
             cosign sign-blob --yes \
               --bundle "$f.cosign.bundle" \
               "$f"
@@ -132,7 +130,8 @@ jobs:
             ```
 
             **precompiled spread binaries** -- statically-linked spread CLI
-            for linux amd64 / arm64, cross-compiled with go 1.25.x. each
+            for linux amd64 / arm64 / s390x / ppc64le, cross-compiled with
+            go 1.25.x. each
             binary ships with a `.sha256` checksum sidecar and a
             `.cosign.bundle` keyless signature bundle.
 

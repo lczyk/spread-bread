@@ -91,6 +91,12 @@ backends:
       - ubuntu-24.04-arm64:
           password: bread
           workers: 4
+      - ubuntu-24.04-s390x:
+          password: bread
+          workers: 4
+      - ubuntu-24.04-ppc64le:
+          password: bread
+          workers: 4
 
 suites:
   tests/spread/integration/:
