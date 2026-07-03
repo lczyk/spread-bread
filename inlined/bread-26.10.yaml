@@ -86,6 +86,12 @@ backends:
       - ubuntu-26.10-arm64:
           password: bread
           workers: 2
+      - ubuntu-26.10-s390x:
+          password: bread
+          workers: 2
+      - ubuntu-26.10-ppc64le:
+          password: bread
+          workers: 2
 
 suites:
   tests/:

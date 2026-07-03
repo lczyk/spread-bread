@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Cross-compile chisel + spread for both target arches inside a single
-# Canonical ubuntu/go:1.25-26.04_edge container. Output binaries land in
-# ./cache/binaries/{chisel,chisel-hacked,spread}-{amd64,arm64}.
+# Cross-compile chisel + spread + docker cli for all target arches inside a
+# single Canonical ubuntu/go:1.25-26.04_edge container. Output binaries land
+# in ./cache/binaries/{chisel,chisel-hacked,spread,docker}-<arch>.
 #
 # Required env vars (set by makefile):
 #   CHISEL_REF        git ref (tag, branch, or SHA) for canonical/chisel
@@ -32,8 +32,9 @@ docker run --rm \
     -e HGID="$HGID" \
     "$GO_BUILDER_IMAGE" -ceuo pipefail '
 # Builder runs natively on host arch and cross-compiles via GOARCH for
-# the other arch. Both binaries are pure Go (no CGO), so cross-compile
+# the other arches. Both binaries are pure Go (no CGO), so cross-compile
 # is clean.
+TARGET_ARCHES="amd64 arm64 s390x ppc64le"
 
 # Canonical ubuntu/go image has /usr/bin/go as a broken symlink in some
 # revisions; pick the actual go binary out of /usr/lib/go-*/bin.
@@ -58,7 +59,7 @@ build() {
     git clone "$repo" "/src/$name"
     cd "/src/$name"
     git checkout "$ref"
-    for arch in amd64 arm64; do
+    for arch in $TARGET_ARCHES; do
         echo "==> building $name for $arch"
         CGO_ENABLED=0 GOOS=linux GOARCH="$arch" \
             go build -trimpath -ldflags "-s -w $extra_ldflags" \
@@ -97,7 +98,7 @@ for p in "${patches[@]}"; do
 done
 CHISEL_HACKED_VERSION_STRING="${CHISEL_VERSION_STRING}-hacked"
 echo "==> chisel-hacked version string: $CHISEL_HACKED_VERSION_STRING"
-for arch in amd64 arm64; do
+for arch in $TARGET_ARCHES; do
     echo "==> building chisel-hacked for $arch"
     CGO_ENABLED=0 GOOS=linux GOARCH="$arch" \
         go build -trimpath -ldflags "-s -w -X github.com/canonical/chisel/cmd.Version=$CHISEL_HACKED_VERSION_STRING" \
@@ -107,29 +108,25 @@ cd /
 
 build spread https://github.com/canonical/spread  "$SPREAD_REF" ./cmd/spread
 
-# Ensure curl + tar present for the docker download step.
-if ! command -v curl >/dev/null; then
-    apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl
-fi
-
-# Fetch the upstream docker static tarball for each target arch and extract
-# only the docker CLI. Upstream binaries are built with a recent go toolchain
-# (1.26+) and so dodge the qemu emulation bug that hits Ubuntu apt'\''s docker.io
-# (built with go 1.24). docker.com uses uname-style arch names: aarch64,
-# x86_64.
-for arch in amd64 arm64; do
-    case "$arch" in
-        amd64) docker_arch=x86_64 ;;
-        arm64) docker_arch=aarch64 ;;
-    esac
-    url="https://download.docker.com/linux/static/stable/${docker_arch}/docker-${DOCKER_VERSION}.tgz"
-    echo "==> downloading docker $DOCKER_VERSION for $arch from $url"
-    tmpdir=$(mktemp -d)
-    curl -fsSL "$url" | tar -xz -C "$tmpdir" docker/docker
-    install -m 0755 "$tmpdir/docker/docker" "/out/docker-$arch"
-    rm -rf "$tmpdir"
+# Build the docker CLI from source for each target arch. docker.com'\''s
+# static tarballs only cover x86_64 / aarch64 at current versions (s390x /
+# ppc64le stopped at 18.06), and Ubuntu apt'\''s docker.io is built with go
+# 1.24 and crashes under qemu emulation -- building from source with the
+# go 1.25 toolchain covers all arches uniformly. docker/cli has no go.mod
+# (vendor.mod + vendor/ instead); the symlink trick puts it in module mode.
+git clone https://github.com/docker/cli /src/docker-cli
+cd /src/docker-cli
+git checkout "v$DOCKER_VERSION"
+ln -s vendor.mod go.mod
+ln -s vendor.sum go.sum
+for arch in $TARGET_ARCHES; do
+    echo "==> building docker cli for $arch"
+    CGO_ENABLED=0 GOOS=linux GOARCH="$arch" \
+        go build -mod=vendor -trimpath \
+        -ldflags "-s -w -X github.com/docker/cli/cli/version.Version=$DOCKER_VERSION" \
+        -o "/out/docker-$arch" ./cmd/docker
 done
+cd /
 
 # Hand ownership back to the invoking user so make can read/replace later.
 chown -R "$HUID:$HGID" /out

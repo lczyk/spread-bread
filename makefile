@@ -8,13 +8,17 @@ DOCKER ?= docker
 CHISEL_REF := v1.4.1
 SPREAD_REF := 9fdce848027b944a50d25ed2271f17c213b44bd5
 GO_BUILDER_IMAGE := ubuntu/go:1.25-26.04_edge
-# Docker CLI fetched from docker.com static; ubuntu apt's docker.io is built
-# with go 1.24 and crashes under qemu emulation, so we ship upstream's static.
+# Docker CLI built from docker/cli source at tag v$(DOCKER_VERSION); ubuntu
+# apt's docker.io is built with go 1.24 and crashes under qemu emulation, and
+# docker.com's static tarballs don't cover s390x / ppc64le.
 DOCKER_VERSION := 29.5.2
 
 # Full matrix.
 VERSIONS := 24.04 25.10 26.04 26.10
-ARCHES   := amd64 arm64
+ARCHES   := amd64 arm64 s390x ppc64le
+# Arches with native runners (local dev + ci). s390x / ppc64le images build
+# under qemu and publish untested; tests + demo stay on the native pair.
+NATIVE_ARCHES := amd64 arm64
 
 # Optional narrowing via env vars, e.g.:
 #   make build-bread VER=24.04
@@ -37,8 +41,9 @@ FULL_VER_ARCH := $(foreach v,$(VERSIONS),$(foreach a,$(ARCHES),$(v)-$(a)))
 BREAD_STAMPS  := $(addprefix .stamp/bread-,$(SELECTED_VER_ARCH))
 CHISEL_STAMPS := $(addprefix .stamp/bread-chisel-releases-,$(SELECTED_VER_ARCH))
 
-# The test-host image only exists at 26.04. ARCH narrowing applies.
-BREAD_TEST_STAMPS := $(addprefix .stamp/bread-test-26.04-,$(SELECTED_ARCHES))
+# The test-host image only exists at 26.04, native arches only. ARCH
+# narrowing applies.
+BREAD_TEST_STAMPS := $(addprefix .stamp/bread-test-26.04-,$(if $(strip $(ARCH)),$(ARCH),$(NATIVE_ARCHES)))
 
 TEMPLATES := $(wildcard templates/*.yaml.in)
 INLINED   := $(patsubst templates/%.yaml.in,inlined/%.yaml,$(TEMPLATES))
@@ -63,7 +68,7 @@ build-bread: $(BREAD_STAMPS)  ## Build bread images (narrow via VER=... ARCH=...
 build-bread-chisel-releases: $(CHISEL_STAMPS)  ## Build bread-chisel-releases images (narrow via VER=... ARCH=...)
 
 .PHONY: build-bread-test
-build-bread-test: $(BREAD_TEST_STAMPS)  ## Build the bread-test (26.04 only, both arches) test-host image
+build-bread-test: $(BREAD_TEST_STAMPS)  ## Build the bread-test (26.04 only, native arches) test-host image
 
 # Run the contract/integration spread suite (tests/spread.yaml). Builds the
 # test-host image + inlined yamls first. Pass extra spread args via SPREAD_ARGS,
@@ -90,11 +95,11 @@ check-base:  ## Report upstream ubuntu base-image digest drift (non-zero exit on
 update-base:  ## Rewrite base Dockerfile @sha256 pins to the current upstream digests
 	@hack/check_base.sh --write
 
-# Demo runs only on LTS versions (24.04, 26.04) x both arches, regardless of VER/ARCH narrowing.
-DEMO_STAMPS := $(foreach a,$(ARCHES),.stamp/bread-24.04-$(a) .stamp/bread-26.04-$(a))
+# Demo runs only on LTS versions (24.04, 26.04) x native arches, regardless of VER/ARCH narrowing.
+DEMO_STAMPS := $(foreach a,$(NATIVE_ARCHES),.stamp/bread-24.04-$(a) .stamp/bread-26.04-$(a))
 
 .PHONY: demo
-demo: $(DEMO_STAMPS)  ## Run the spread demo on LTS systems (24.04 + 26.04, both arches)
+demo: $(DEMO_STAMPS)  ## Run the spread demo on LTS systems (24.04 + 26.04, native arches)
 	$(MAKE) -C demo run
 
 .PHONY: inlined-yaml-files
@@ -157,7 +162,7 @@ nuke-spread:  ## Kill stray spread processes + force-remove bread containers
 clean:  ## Remove built images, stamps, generated inlined yamls, cached binaries
 	-@$(foreach va,$(FULL_VER_ARCH), \
 		$(DOCKER) rmi -f bread:$(va) bread-chisel-releases:$(va) 2>/dev/null ; )
-	-@$(foreach a,$(ARCHES), \
+	-@$(foreach a,$(NATIVE_ARCHES), \
 		$(DOCKER) rmi -f bread-test:26.04-$(a) 2>/dev/null ; )
 	rm -rf .stamp
 	rm -rf cache
