@@ -13,6 +13,17 @@ name: Build OCI image tarballs
 
 on:
   workflow_call:
+    inputs:
+      # JSON matrix-include list; callers can narrow to a subset of the
+      # default (e.g. ci builds only the qemu arches to avoid rebuilding
+      # what build-and-test already builds natively).
+      matrix:
+        type: string
+        default: >-
+          [{"runner": "ubuntu-24.04",     "arch": "amd64"},
+           {"runner": "ubuntu-24.04-arm", "arch": "arm64"},
+           {"runner": "ubuntu-24.04",     "arch": "s390x",   "qemu": true},
+           {"runner": "ubuntu-24.04",     "arch": "ppc64le", "qemu": true}]
 
 permissions:
   contents: read
@@ -22,17 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - runner: ubuntu-24.04
-            arch: amd64
-          - runner: ubuntu-24.04-arm
-            arch: arm64
-          - runner: ubuntu-24.04
-            arch: s390x
-            qemu: true
-          - runner: ubuntu-24.04
-            arch: ppc64le
-            qemu: true
+        include: ${{ fromJSON(inputs.matrix) }}
     runs-on: ${{ matrix.runner }}
     # NOTE: 90 min covers the qemu lanes; native lanes finish well under 30.
     timeout-minutes: 90
