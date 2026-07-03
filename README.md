@@ -1,11 +1,14 @@
 # spread-bread
 
+<img src="assets/logo.png" alt="Spread-bread logo" align="right" width="300">
+
 [![CI](https://github.com/lczyk/spread-bread/actions/workflows/ci.yaml/badge.svg)](https://github.com/lczyk/spread-bread/actions/workflows/ci.yaml)
-[![yamls](https://img.shields.io/github/v/release/lczyk/spread-bread?label=yamls)](https://github.com/lczyk/spread-bread/releases/latest)
-[![ghcr bread](https://img.shields.io/badge/ghcr-bread-blue?logo=docker)](https://github.com/lczyk/spread-bread/pkgs/container/spread-bread%2Fbread)
-[![ghcr bread-chisel-releases](https://img.shields.io/badge/ghcr-bread--chisel--releases-blue?logo=docker)](https://github.com/lczyk/spread-bread/pkgs/container/spread-bread%2Fbread-chisel-releases)
+[![downloads](https://img.shields.io/github/v/release/lczyk/spread-bread?label=downloads)](https://github.com/lczyk/spread-bread/releases/latest)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-E95420?logo=ubuntu&logoColor=white)](#)
 [![bread](https://img.shields.io/badge/%F0%9F%8D%9E-bread-fb83ac)](https://github.com/lczyk/spread-bread/releases/latest)
+
+[![ghcr bread](https://img.shields.io/badge/ghcr-bread-blue?logo=docker)](https://github.com/lczyk/spread-bread/pkgs/container/spread-bread%2Fbread)
+[![ghcr bread-chisel-releases](https://img.shields.io/badge/ghcr-bread--chisel--releases-blue?logo=docker)](https://github.com/lczyk/spread-bread/pkgs/container/spread-bread%2Fbread-chisel-releases)
 
 because it rhymes 🤷🏻‍♀️
 
@@ -14,22 +17,6 @@ prebuilt docker images + ready-to-use spread yamls so you can drop Canonical [`s
 
 > [!WARNING]
 > This project has many footguns. The test containers are run with no authentication and in --privileged mode. Make sure you know what you are doing.
-
-anyway, here is this project's pet bread:
-
-```
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣴⣶⣿
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣴⣿⣿⣿⣿⡟
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⠀⠤⣤⣄⣉⠙⢻⡟⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠴⢿⣷⣦⣤⣈⣉⣀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⡀⠒⠶⣶⣦⣤⣈⠙⢻⡟⠁⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠐⠾⢿⣷⣦⣤⣤⣤⣤⡤⠊⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⣀⠐⠶⣶⣤⣄⡉⠻⣿⣿⠏⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠾⢿⣿⣦⣤⣬⣉⣉⣤⠞⠁⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⢠⣄⠑⠲⠤⣈⠙⢻⣿⡿⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⢀⣿⣿⣿⣶⣦⣤⣤⠞⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠸⣿⣿⣿⠿⠟⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-```
 
 ## flavours
 
@@ -155,3 +142,19 @@ the outer spreads a `bread-test` container; that container runs an inner spread 
 - attaches `inlined/*.yaml` to a rolling github release called `yamls`. older `r*` releases are deleted (release objects only; the underlying tags stay).
 
 ci (`ci.yaml`) is build + test on every PR + push to main; no publish.
+
+anyway, here is this project's pet bread:
+
+```
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣴⣶⣿
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣴⣿⣿⣿⣿⡟
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⠀⠤⣤⣄⣉⠙⢻⡟⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠴⢿⣷⣦⣤⣈⣉⣀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⡀⠒⠶⣶⣦⣤⣈⠙⢻⡟⠁⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠐⠾⢿⣷⣦⣤⣤⣤⣤⡤⠊⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⣀⠐⠶⣶⣤⣄⡉⠻⣿⣿⠏⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠾⢿⣿⣦⣤⣬⣉⣉⣤⠞⠁⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⢠⣄⠑⠲⠤⣈⠙⢻⣿⡿⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⢀⣿⣿⣿⣶⣦⣤⣤⠞⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠸⣿⣿⣿⠿⠟⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+```

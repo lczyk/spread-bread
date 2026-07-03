@@ -71,8 +71,13 @@ jobs:
             echo "to publish."
           } > /tmp/pr-body.md
 
-          if gh pr view "$branch" >/dev/null 2>&1; then
-            echo "PR already open for $branch; branch updated"
+          # NOTE: `gh pr view <branch>` is wrong here twice over: it also
+          # resolves merged/closed PRs (would skip create forever after the
+          # first merge), and it has flaked with an open PR present. list
+          # open PRs by head branch instead.
+          open_pr=$(gh pr list --head "$branch" --state open --json number --jq '.[].number')
+          if [ -n "$open_pr" ]; then
+            echo "PR #$open_pr already open for $branch; branch updated"
           else
             gh pr create --base main --head "$branch" \
               --title "chore: bump ubuntu base digests" \
