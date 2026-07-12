@@ -27,19 +27,47 @@ backends:
       image="ghcr.io/lczyk/spread-bread/bread:$ver"
       echo "image: $image"
 
-      # Use a counter file to ensure unique container names.
-      # snippet thanks to @lengau
-      # https://github.com/canonical/charmcraft/blob/120a00a50f7ed3d0ae2fc2bea69e2e43b68b1594/spread.yaml#L72-L79
-      sleep 0.$RANDOM  # Minimize chances of a race condition
-      export counter_file=".spread-worker-num"
-      instance_num=$(
-          flock -x $counter_file bash -c '
-          [ -s $counter_file ] || echo 0 > $counter_file
-          num=$(< $counter_file) && echo $num
-          echo $(( $num + 1 )) > $counter_file'
-      )
+      # Networking mode: how spread reaches the container's sshd.
+      #   bridge  -- connect to the container's docker bridge IP. Works where the host
+      #              shares the docker bridge network (linux native), so 172.17.x.x is
+      #              routable from the spread host.
+      #   publish -- publish sshd to 127.0.0.1:<ephemeral host port> and connect there.
+      #              Needed where the bridge IP is not host-routable, e.g. Docker
+      #              Desktop on macOS (docker runs in a VM).
+      # Default is per-OS; override with BREAD_NET=bridge|publish.
+      mode="${BREAD_NET:-}"
+      if [ -z "$mode" ]; then
+          case "$(uname -s)" in
+              Darwin) mode=publish ;;
+              *)      mode=bridge ;;
+          esac
+      fi
+      case "$mode" in
+          bridge|publish) ;;
+          *) echo "BREAD_NET must be 'bridge' or 'publish', got: '$mode'" >&2; exit 1 ;;
+      esac
+      echo "net mode: $mode"
 
-      container_name="bread-${ver}-${arch}-${instance_num}"
+      if [ "$mode" = bridge ]; then
+          # Use a counter file to ensure unique container names.
+          # snippet thanks to @lengau
+          # https://github.com/canonical/charmcraft/blob/120a00a50f7ed3d0ae2fc2bea69e2e43b68b1594/spread.yaml#L72-L79
+          sleep 0.$RANDOM  # Minimize chances of a race condition
+          export counter_file=".spread-worker-num"
+          instance_num=$(
+              flock -x $counter_file bash -c '
+              [ -s $counter_file ] || echo 0 > $counter_file
+              num=$(< $counter_file) && echo $num
+              echo $(( $num + 1 )) > $counter_file'
+          )
+          container_name="bread-${ver}-${arch}-${instance_num}"
+          publish_flag=""
+      else
+          # publish mode: no shared counter file (no flock dependency); a pid+RANDOM
+          # suffix is unique enough for a name. Docker picks the free host port.
+          container_name="bread-${ver}-${arch}-$$-${RANDOM}"
+          publish_flag="-p 127.0.0.1::22"
+      fi
       echo "container_name: $container_name"
 
       docker run \
@@ -48,12 +76,20 @@ backends:
           -e DEBIAN_FRONTEND=noninteractice \
           -e "usr=$SPREAD_SYSTEM_USERNAME" \
           -e "pass=$SPREAD_SYSTEM_PASSWORD" \
+          $publish_flag \
           --name "$container_name" \
           -d "$image"
 
       until docker exec "$container_name" pgrep sshd; do sleep 1; done
 
-      ADDRESS "$(docker inspect "$container_name" --format '{{.NetworkSettings.Networks.bridge.IPAddress}}')"
+      if [ "$mode" = publish ]; then
+          # The ephemeral host port docker mapped to the container's sshd.
+          port=$(docker port "$container_name" 22 | head -n1 | cut -d: -f2)
+          [ -n "$port" ] || { echo "could not find published sshd port for $container_name" >&2; exit 1; }
+          ADDRESS "127.0.0.1:$port"
+      else
+          ADDRESS "$(docker inspect "$container_name" --format '{{.NetworkSettings.Networks.bridge.IPAddress}}')"
+      fi
     discard: |
       #!/bin/bash
 
@@ -61,22 +97,42 @@ backends:
 
       echo "Discarding container for system: $SPREAD_SYSTEM_ADDRESS"
 
-      # We cannot filter by IP address directly, so find the container by inspecting all of them.
+      # The address format tells us how the container was allocated (see the allocate
+      # script's BREAD_NET modes): "host:port" -> publish mode, bare IP -> bridge mode.
+      # Inferring from the address makes discard robust even if BREAD_NET is flipped
+      # between allocate and discard.
       container_name=""
-      for cid in $(docker ps -a --filter "network=bridge" --format '{{.ID}}'); do
-          cname=$(docker inspect "$cid" --format '{{.Name}}' | sed 's/^\/\(.*\)/\1/')
-          cip=$(docker inspect "$cid" --format '{{.NetworkSettings.Networks.bridge.IPAddress}}' || echo "")
-          if [ "$cip" == "$SPREAD_SYSTEM_ADDRESS" ]; then
-              container_name="$cname"
-              break
-          fi
-      done
+      case "$SPREAD_SYSTEM_ADDRESS" in
+          *:*)
+              # publish mode: match the container by its published host port.
+              target_port="${SPREAD_SYSTEM_ADDRESS##*:}"
+              for cid in $(docker ps -a --format '{{.ID}}'); do
+                  if docker port "$cid" 22 2>/dev/null | grep -q ":${target_port}\$"; then
+                      container_name=$(docker inspect "$cid" --format '{{.Name}}' | sed 's#^/##')
+                      break
+                  fi
+              done
+              not_found="No container found with published port: $target_port"
+              ;;
+          *)
+              # bridge mode: match the container by its bridge IP address.
+              for cid in $(docker ps -a --filter "network=bridge" --format '{{.ID}}'); do
+                  cname=$(docker inspect "$cid" --format '{{.Name}}' | sed 's/^\/\(.*\)/\1/')
+                  cip=$(docker inspect "$cid" --format '{{.NetworkSettings.Networks.bridge.IPAddress}}' || echo "")
+                  if [ "$cip" == "$SPREAD_SYSTEM_ADDRESS" ]; then
+                      container_name="$cname"
+                      break
+                  fi
+              done
+              not_found="No container found with IP address: $SPREAD_SYSTEM_ADDRESS"
+              ;;
+      esac
 
       if [ -n "$container_name" ]; then
           echo "Removing container: $container_name"
           docker rm -f "$container_name" 2>/dev/null || true
       else
-          echo "No container found with IP address: $SPREAD_SYSTEM_ADDRESS"
+          echo "$not_found"
           exit 1
       fi
     systems:
