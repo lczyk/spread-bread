@@ -54,6 +54,20 @@ available yamls in the release:
 - `bread-{24.04,25.10,26.04,26.10}.yaml`
 - `bread-chisel-releases-{24.04,25.10,26.04,26.10}.yaml`
 
+### networking (linux vs macOS)
+
+the allocate script reaches the container's sshd in one of two ways, picked automatically from `uname`:
+
+- **`bridge`** (default on linux) -- connects to the container's docker bridge IP. relies on the host sharing the docker bridge network, so `172.17.x.x` is routable.
+- **`publish`** (default on macOS) -- publishes sshd to `127.0.0.1:<ephemeral port>` and connects there. Docker Desktop on macOS runs the daemon in a VM, so bridge IPs are not host-routable; publishing a port is.
+
+override the default with `BREAD_NET`:
+
+```
+BREAD_NET=publish spread   # force port-publishing (e.g. to test the macOS path on linux)
+BREAD_NET=bridge  spread   # force bridge IPs
+```
+
 ## install spread
 
 prefer a precompiled spread CLI over `go install`? same release ships statically-linked binaries for linux amd64 / arm64 / s390x / ppc64le:
