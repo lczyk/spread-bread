@@ -55,6 +55,13 @@ BREAD_NET=publish spread   # force port-publishing (e.g. to test the macOS path 
 BREAD_NET=bridge  spread   # force bridge IPs
 ```
 
+one more macOS gotcha: spread packs the project with the host `tar`, and macOS `tar` injects `._*` AppleDouble sidecar files (resource-fork metadata) into the archive. they unpack as real files in the container and can break tools that scan for `*.yaml` etc. export `COPYFILE_DISABLE=1` so macOS `tar` skips them:
+
+```
+export COPYFILE_DISABLE=1
+spread
+```
+
 ## install spread
 
 prefer a precompiled spread CLI over `go install`? same release ships statically-linked binaries for linux amd64 / arm64 / s390x / ppc64le:
