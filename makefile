@@ -5,7 +5,7 @@ DOCKER ?= docker
 
 # Cross-compiled go binaries baked into bread-chisel-releases + bread-test.
 # Pinned to specific upstream commits for reproducibility.
-CHISEL_REF := v1.4.1
+CHISEL_REF := v1.4.2
 SPREAD_REF := 9fdce848027b944a50d25ed2271f17c213b44bd5
 GO_BUILDER_IMAGE := ubuntu/go:1.25-26.04_edge
 # Docker CLI built from docker/cli source at tag v$(DOCKER_VERSION); ubuntu

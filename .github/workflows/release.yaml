@@ -140,7 +140,7 @@ jobs:
             chmod +x /usr/local/bin/spread
             ```
 
-            **precompiled chisel-hacked binaries** -- chisel v1.4.1 with
+            **precompiled chisel-hacked binaries** -- chisel v1.4.2 with
             CHISEL_HACKS patches applied. when `CHISEL_HACKS=1` is set,
             skips release maintenance checks and release validation -- used
             by chisel-releases tests against in-development releases.
