@@ -95,7 +95,7 @@ the cert-identity regex above is approximate; consult the actual issued cert on 
 spread-bread/
   makefile                       # build images + generate inlined yamls + run contract tests
   hack/
-    build_binaries.sh            # cross-compile chisel + spread + docker cli in one ubuntu/go builder
+    build_binaries.rb            # cross-compile chisel + spread + docker cli in one ubuntu/go builder
     build_image.sh               # per-image build w/ hash-stamp short-circuit
     hash_inputs.sh               # per-image input hash (drives stamp invalidation)
     check_base.sh                # detect upstream ubuntu base digest drift; rewrite @sha256 pins

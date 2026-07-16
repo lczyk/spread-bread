@@ -128,7 +128,7 @@ BINARIES_ENV := CHISEL_REF="$(CHISEL_REF)" SPREAD_REF="$(SPREAD_REF)" GO_BUILDER
 		cur=$$(cat $@ 2>/dev/null || true) ; \
 		if [ "$$new" != "$$cur" ]; then \
 			echo "==> building go binaries (chisel + spread + docker, both arches)" ; \
-			$(BINARIES_ENV) hack/build_binaries.sh ; \
+			$(BINARIES_ENV) hack/build_binaries.rb ; \
 			echo "$$new" > $@ ; \
 		else \
 			echo "==> go binaries up-to-date (stamp matches)" ; \

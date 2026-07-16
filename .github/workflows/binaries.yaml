@@ -32,7 +32,7 @@ jobs:
           path: |
             cache/binaries/
             .stamp/binaries
-          key: binaries-${{ hashFiles('hack/build_binaries.sh', 'makefile') }}
+          key: binaries-${{ hashFiles('hack/build_binaries.rb', 'makefile') }}
 
       - name: Build go binaries (chisel + spread + docker static)
         if: steps.binaries-cache.outputs.cache-hit != 'true'

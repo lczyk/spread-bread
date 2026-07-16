@@ -15,13 +15,13 @@ name="$1"
 
 if [ "$name" = "binaries" ]; then
     # Binary cache hash combines:
-    #   - hack/build_binaries.sh content (drives how things build)
+    #   - hack/build_binaries.rb content (drives how things build)
     #   - CHISEL_REF + SPREAD_REF + GO_BUILDER_IMAGE env vars (drive what is built)
     : "${CHISEL_REF:?required}"
     : "${SPREAD_REF:?required}"
     : "${GO_BUILDER_IMAGE:?required}"
     : "${DOCKER_VERSION:?required}"
-    { sha256sum hack/build_binaries.sh patches/chisel/*.patch; \
+    { sha256sum hack/build_binaries.rb patches/chisel/*.patch; \
       printf 'CHISEL_REF=%s\nSPREAD_REF=%s\nGO_BUILDER_IMAGE=%s\nDOCKER_VERSION=%s\n' \
           "$CHISEL_REF" "$SPREAD_REF" "$GO_BUILDER_IMAGE" "$DOCKER_VERSION"; \
     } | sha256sum | cut -d' ' -f1

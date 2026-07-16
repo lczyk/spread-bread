@@ -1,5 +1,5 @@
 # Test-host image: bread:26.04 + docker.io + spread (cross-compiled in
-# the binaries cache; see hack/build_binaries.sh). Used as the outer
+# the binaries cache; see hack/build_binaries.rb). Used as the outer
 # system in the spread-in-spread test flow.
 
 ARG BASE_TAG=26.04-amd64
