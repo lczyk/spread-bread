@@ -2,8 +2,13 @@
 
 FROM docker.io/library/ubuntu:25.10@sha256:7cc5e35f6567ee8c66d2abb4aab0fd866669e6207c237c3a8f0947a5c7f17092
 
-RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server && \
+# Skip man/doc/info install for every subsequent package -- dpkg's man-db
+# trigger is a major cost under qemu emulation (s390x / ppc64le). Persists in
+# the image fs, so the bread-chisel-releases install inherits the exclusion.
+RUN printf 'path-exclude /usr/share/man/*\npath-exclude /usr/share/doc/*\npath-exclude /usr/share/info/*\n' \
+        > /etc/dpkg/dpkg.cfg.d/01-nodoc && \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openssh-server && \
     mkdir /var/run/sshd || true && \
     echo 'root:bread' | chpasswd && \
     echo "PermitRootLogin yes" >> /etc/ssh/sshd_config && \
