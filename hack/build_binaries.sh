@@ -90,7 +90,6 @@ patches=(
     /patches/chisel/0001-*.patch
     /patches/chisel/0002-*.patch
     /patches/chisel/0003-*.patch
-    /patches/chisel/0004-*.patch
 )
 for p in "${patches[@]}"; do
     echo "==> applying patch: $(basename "$p")"

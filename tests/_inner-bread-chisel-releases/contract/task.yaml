@@ -23,15 +23,15 @@ execute: |
   fi
 
   # only the hacked chisel is shipped; `chisel` is a symlink to chisel-hacked,
-  # so `chisel --version` also reports the -hacked suffix (pinned v1.4.1).
-  chisel --version | grep -q "v1\.4\.1-hacked" || {
+  # so `chisel --version` also reports the -hacked suffix (pinned v1.4.2).
+  chisel --version | grep -q "v1\.4\.2-hacked" || {
       echo "chisel binary missing or wrong version"
       chisel --version || true
       exit 1
   }
 
   # chisel-hacked: same base version, -hacked suffix in version string.
-  chisel-hacked --version | grep -q "v1\.4\.1-hacked" || {
+  chisel-hacked --version | grep -q "v1\.4\.2-hacked" || {
       echo "chisel-hacked binary missing or wrong version"
       chisel-hacked --version || true
       exit 1
