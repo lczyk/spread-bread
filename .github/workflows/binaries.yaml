@@ -21,10 +21,11 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       # Cache the cross-compiled binaries between runs, keyed on every
-      # input that affects the build: the build script + the makefile
-      # (which holds the version pins CHISEL_REF / SPREAD_REF /
-      # DOCKER_VERSION / GO_BUILDER_IMAGE). Hit -> skip the make step.
-      # Miss -> make rebuilds and the cache auto-saves at job end.
+      # input that affects the build: the build script, the chisel patches,
+      # + the makefile (which holds the version pins CHISEL_REF / SPREAD_REF /
+      # DOCKER_VERSION / GO_BUILDER_IMAGE). Mirrors hack/hash_inputs.sh's
+      # binaries input set. Hit -> skip the make step. Miss -> make rebuilds
+      # and the cache auto-saves at job end.
       - name: Restore binaries cache
         id: binaries-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -32,7 +33,7 @@ jobs:
           path: |
             cache/binaries/
             .stamp/binaries
-          key: binaries-${{ hashFiles('hack/build_binaries.sh', 'makefile') }}
+          key: binaries-${{ hashFiles('hack/build_binaries.rb', 'patches/chisel/*.patch', 'makefile') }}
 
       - name: Build go binaries (chisel + spread + docker static)
         if: steps.binaries-cache.outputs.cache-hit != 'true'
