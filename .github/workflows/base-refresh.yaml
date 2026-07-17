@@ -40,7 +40,9 @@ jobs:
           token: ${{ secrets.BOT_PAT }}
 
       - name: Resolve + rewrite drifted base pins
-        run: make update-base | tee /tmp/base-refresh.log
+        run: |
+          set -eo pipefail
+          make update-base | tee /tmp/base-refresh.log
 
       - name: Open / update PR on drift
         env:
