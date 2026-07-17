@@ -36,3 +36,22 @@ jobs:
       matrix: >-
         [{"runner": "ubuntu-24.04", "arch": "s390x",   "qemu": true},
          {"runner": "ubuntu-24.04", "arch": "ppc64le", "qemu": true}]
+
+  # Guard: inlined/*.yaml is generated from templates/ + scripts/ and also
+  # committed (repo-tree consumers grab it directly). Regenerate and fail on
+  # drift so a template or script edit can't land without its matching
+  # inlined refresh. Ubuntu runners ship ruby, so no extra setup.
+  check-inlined:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Assert committed inlined yamls match templates + scripts
+        run: |
+          make inlined-yaml-files
+          if ! git diff --exit-code inlined/; then
+            echo "::error::inlined/*.yaml is stale -- run 'make inlined-yaml-files' and commit the result"
+            exit 1
+          fi
