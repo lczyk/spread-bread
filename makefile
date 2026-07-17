@@ -14,7 +14,7 @@ GO_BUILDER_IMAGE := ubuntu/go:1.25-26.04_edge
 DOCKER_VERSION := 29.5.2
 
 # Full matrix.
-VERSIONS := 24.04 25.10 26.04 26.10
+VERSIONS := 22.04 24.04 25.10 26.04 26.10
 ARCHES   := amd64 arm64 s390x ppc64le
 # Arches with native runners (local dev + ci). s390x / ppc64le images build
 # under qemu and publish untested; tests + demo stay on the native pair.

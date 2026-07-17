@@ -20,7 +20,7 @@ prebuilt docker images + ready-to-use spread yamls so you can drop Canonical [`s
 
 ## flavours
 
-two image flavours, each for ubuntu 24.04, 25.10, 26.04, 26.10 x amd64 / arm64 / s390x / ppc64le, published as multiarch tags at `ghcr.io/lczyk/spread-bread/<flavour>:<ver>`. heads-up: s390x + ppc64le images build under qemu and ship untested (no native runners); amd64 + arm64 are tested on every release:
+two image flavours, each for ubuntu 22.04, 24.04, 25.10, 26.04, 26.10 x amd64 / arm64 / s390x / ppc64le, published as multiarch tags at `ghcr.io/lczyk/spread-bread/<flavour>:<ver>`. heads-up: s390x + ppc64le images build under qemu and ship untested (no native runners); amd64 + arm64 are tested on every release:
 
 - **`bread`** -- base: ubuntu + sshd. general-purpose spread system; the test suite installs whatever else it needs.
 - **`bread-chisel-releases`** -- bread + `chisel` + the shell + container tooling typically needed by [chisel-releases](https://github.com/canonical/chisel-releases) spread tests (curl, wget, git, jq, file, sudo, tree, docker, skopeo). `chisel` and `docker` are built from source (canonical/chisel pinned by SHA, docker/cli pinned by version tag) so the bundled binaries are go 1.25+ and survive qemu emulation.
@@ -38,8 +38,8 @@ allocate inside the yaml `docker run`s the matching multiarch ghcr image; `--pla
 
 available yamls in the release:
 
-- `bread-{24.04,25.10,26.04,26.10}.yaml`
-- `bread-chisel-releases-{24.04,25.10,26.04,26.10}.yaml`
+- `bread-{22.04,24.04,25.10,26.04,26.10}.yaml`
+- `bread-chisel-releases-{22.04,24.04,25.10,26.04,26.10}.yaml`
 
 ### networking (linux vs macOS)
 

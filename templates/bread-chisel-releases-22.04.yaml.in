@@ -1,0 +1,42 @@
+project: chisel-releases
+
+path: /chisel-releases
+
+environment:
+  PROJECT_PATH: /chisel-releases
+  SHARED_LIBRARIES: $PROJECT_PATH/tests/spread/lib
+  PATH: /snap/bin:$PATH:$SHARED_LIBRARIES
+  # NOTE: empty by default; opt in per-run with `CHISEL_HACKS=1 spread ...`.
+  # $(HOST:...) forwards the host env var into the remote (spread sends only
+  # vars declared here, not the ambient host env).
+  CHISEL_HACKS: "$(HOST: echo $CHISEL_HACKS)"
+
+exclude:
+  - .git
+  - .github
+  - .vscode
+  - work
+  - rootfs
+
+backends:
+  docker:
+    type: adhoc
+    allocate: source scripts/spread_allocate_bread-chisel-releases.sh
+    discard: source scripts/spread_discard_bread-chisel-releases.sh
+    systems:
+      - ubuntu-22.04-amd64:
+          password: bread
+          workers: 4
+      - ubuntu-22.04-arm64:
+          password: bread
+          workers: 4
+      - ubuntu-22.04-s390x:
+          password: bread
+          workers: 4
+      - ubuntu-22.04-ppc64le:
+          password: bread
+          workers: 4
+
+suites:
+  tests/spread/integration/:
+    summary: Tests common scenarios
