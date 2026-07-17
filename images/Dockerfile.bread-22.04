@@ -1,0 +1,37 @@
+# Bread image: Ubuntu 22.04 + sshd only.
+
+FROM docker.io/library/ubuntu:22.04@sha256:0e0a0fc6d18feda9db1590da249ac93e8d5abfea8f4c3c0c849ce512b5ef8982
+
+# Skip man/doc/info install for every subsequent package -- dpkg's man-db
+# trigger is a major cost under qemu emulation (s390x / ppc64le). Persists in
+# the image fs, so the bread-chisel-releases install inherits the exclusion.
+RUN printf 'path-exclude /usr/share/man/*\npath-exclude /usr/share/doc/*\npath-exclude /usr/share/info/*\n' \
+        > /etc/dpkg/dpkg.cfg.d/01-nodoc && \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openssh-server && \
+    mkdir /var/run/sshd || true && \
+    echo 'root:bread' | chpasswd && \
+    echo "PermitRootLogin yes" >> /etc/ssh/sshd_config && \
+    echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Replace /etc/pam.d/sshd with a pam_permit-only stack. These images are
+# throwaway test containers; we don't care about password validity, and the
+# default pam_unix stack pulls in unix_chkpwd which can fail to load
+# libcrypt.so.1 inside privileged containers on some hosts.
+RUN printf '%s\n' \
+    'auth     required pam_permit.so' \
+    'account  required pam_permit.so' \
+    'session  required pam_permit.so' \
+    'password required pam_permit.so' \
+    > /etc/pam.d/sshd
+
+# Insecure-image warning. Prints on interactive logins (ssh, `docker exec -it`).
+# See hack/bread-warning.sh for design notes.
+COPY hack/banner.txt        /etc/bread-banner.txt
+COPY hack/bread-warning.sh  /etc/profile.d/00-bread-warning.sh
+RUN chmod 0644 /etc/bread-banner.txt /etc/profile.d/00-bread-warning.sh && \
+    printf '\n# bread-warning\n[ -r /etc/profile.d/00-bread-warning.sh ] && . /etc/profile.d/00-bread-warning.sh\n' >> /root/.bashrc
+
+EXPOSE 22
+CMD ["/usr/sbin/sshd", "-D"]
