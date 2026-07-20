@@ -1,5 +1,3 @@
-#spellchecker: ignore noninteractice
-
 set -e
 
 ver=$(echo "$SPREAD_SYSTEM" | cut -d- -f2)   # e.g., ubuntu-24.04-amd64 -> 24.04
@@ -56,7 +54,7 @@ echo "container_name: $container_name"
 docker run \
     --rm \
     --platform "linux/$arch" \
-    -e DEBIAN_FRONTEND=noninteractice \
+    -e DEBIAN_FRONTEND=noninteractive \
     -e "usr=$SPREAD_SYSTEM_USERNAME" \
     -e "pass=$SPREAD_SYSTEM_PASSWORD" \
     $publish_flag \

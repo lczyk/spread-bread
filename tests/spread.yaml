@@ -17,8 +17,6 @@ backends:
     type: adhoc
 
     allocate: |
-      #spellchecker: ignore noninteractice
-
       set -e
 
       ver=$(echo "$SPREAD_SYSTEM" | cut -d- -f2)   # ubuntu-26.04-amd64 -> 26.04
@@ -54,7 +52,7 @@ backends:
           --privileged \
           -v /var/run/docker.sock:/var/run/docker.sock \
           -v "$repo_root:/spread-bread:ro" \
-          -e DEBIAN_FRONTEND=noninteractice \
+          -e DEBIAN_FRONTEND=noninteractive \
           -e "usr=$SPREAD_SYSTEM_USERNAME" \
           -e "pass=$SPREAD_SYSTEM_PASSWORD" \
           --name "$container_name" \
