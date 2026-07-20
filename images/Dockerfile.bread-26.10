@@ -1,6 +1,6 @@
 # Bread image: Ubuntu 26.10 + sshd only.
 
-FROM docker.io/library/ubuntu:26.10@sha256:a7e5c4bad66bf263642da9a16207ed0fb80668a1f17d2e44c8c5e2cc0ce59346
+FROM docker.io/library/ubuntu:26.10@sha256:694b773ee7e0d0b55ca74c095ac3309055589e7cbfaf3100f0b226c38c6936fa
 
 # Skip man/doc/info install for every subsequent package -- dpkg's man-db
 # trigger is a major cost under qemu emulation (s390x / ppc64le). Persists in
