@@ -1,0 +1,112 @@
+name: rocks CI
+run-name: rocks CI for ${{ github.ref }}
+
+# Build + test the chiselled rocks on PR + push to main. No publishing.
+# Build packs each rock per-arch (native runners); test loads that arch's rocks
+# into the local daemon and runs the single top-level spread suite over the
+# native-arch systems.
+on:
+  pull_request:
+    paths:
+      - 'rocks/**'
+      - '.github/workflows/rocks-ci.yaml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'rocks/**'
+      - '.github/workflows/rocks-ci.yaml'
+  workflow_dispatch:
+
+concurrency:
+  group: rocks-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        dir:
+          - bread-24.04
+          - bread-25.10
+          - bread-26.04
+          - bread-chisel-releases-24.04
+          - bread-chisel-releases-25.10
+          - bread-chisel-releases-26.04
+        arch:
+          - amd64
+          - arm64
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Sync shared hack/ + patches/ into the rock dir
+        run: ruby rocks/sync_shared.rb ${{ matrix.dir }}
+
+      - name: Pack rock
+        uses: canonical/craft-actions/rockcraft-pack@main
+        with:
+          path: rocks/${{ matrix.dir }}
+          verbosity: brief
+
+      - name: Rename to predictable artefact name
+        run: mv rocks/${{ matrix.dir }}/*.rock rocks/${{ matrix.dir }}/${{ matrix.dir }}.rock
+
+      - name: Upload rock artefact
+        uses: actions/upload-artifact@v6
+        with:
+          name: rock-${{ matrix.dir }}-${{ matrix.arch }}
+          path: rocks/${{ matrix.dir }}/${{ matrix.dir }}.rock
+
+  test:
+    needs: build
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Download this arch's rocks
+        uses: actions/download-artifact@v6
+        with:
+          pattern: rock-*-${{ matrix.arch }}
+          path: dl
+
+      - name: Place rocks under their dirs
+        run: |
+          set -e
+          for d in dl/rock-*-${{ matrix.arch }}; do
+              base=$(basename "$d")              # rock-<dir>-<arch>
+              dir=${base#rock-}
+              dir=${dir%-${{ matrix.arch }}}
+              cp "$d/$dir.rock" "rocks/$dir/$dir.rock"
+          done
+
+      - name: Install spread + skopeo
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+          go install github.com/canonical/spread/cmd/spread@latest
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+
+      - name: Run the top-level spread suite (${{ matrix.arch }})
+        run: make -C rocks spread-only

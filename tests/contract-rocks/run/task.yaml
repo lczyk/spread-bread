@@ -1,0 +1,67 @@
+summary: rock contract -- version/arch + bread bits, plus chisel/tooling for the cr flavour
+
+execute: |
+  set -e
+
+  # grep is NOT in the rock (coreutils_bins doesn't ship it), so this task
+  # uses only shell builtins + coreutils -- no grep/sed.
+  name="$SPREAD_SYSTEM"
+  arch="${name##*-}"
+  rest="${name%-*}"
+  expected_ver="${rest##*-}"
+  flavour="${rest%-*}"
+
+  # --- ubuntu version (from base-files_release-info) matches the system name.
+  actual_ver=$(. /etc/os-release && echo "$VERSION_ID")
+  if [ "$expected_ver" != "$actual_ver" ]; then
+      echo "ver mismatch: expected=$expected_ver got=$actual_ver"
+      exit 1
+  fi
+
+  # --- arch matches (uname -m -> docker arch name).
+  case "$(uname -m)" in
+      x86_64)  actual_arch=amd64 ;;
+      aarch64) actual_arch=arm64 ;;
+      *)       actual_arch=$(uname -m) ;;
+  esac
+  if [ "$arch" != "$actual_arch" ]; then
+      echo "arch mismatch: expected=$arch got=$actual_arch"
+      exit 1
+  fi
+
+  # --- shell + core utils present.
+  command -v bash >/dev/null || { echo "missing bash"; exit 1; }
+  command -v ls   >/dev/null || { echo "missing coreutils (ls)"; exit 1; }
+
+  # --- bread-warning banner: files installed + the script prints when sourced.
+  # spread's (non-tty) session shell already sourced /etc/profile -> profile.d,
+  # whose silent path exports BREAD_BANNER_SHOWN=1 -- so clear it here, else the
+  # dedupe guard makes the re-source a no-op.
+  test -r /etc/profile.d/00-bread-warning.sh || {
+      echo "missing /etc/profile.d/00-bread-warning.sh"; exit 1; }
+  test -r /etc/bread-banner.txt || { echo "missing /etc/bread-banner.txt"; exit 1; }
+  out=$(BREAD_BANNER_SHOWN= BREAD_BANNER_FORCE=1 bash -c '. /etc/profile.d/00-bread-warning.sh' 2>&1)
+  case "$out" in
+      *"INSECURE TEST IMAGE"*) : ;;
+      *) echo "banner did not print when sourced"; echo "--- $out ---"; exit 1 ;;
+  esac
+
+  # --- apt: update resolves, and the lazy-apt shim self-replaces with a symlink.
+  apt-get update
+  [ -L /usr/local/bin/apt-get ] || { echo "lazy-apt shim did not self-replace"; exit 1; }
+
+  # --- chisel-releases flavour extras.
+  case "$flavour" in
+      *chisel*)
+          cv=$(chisel --version 2>&1)
+          case "$cv" in *v1.4.1*) : ;; *) echo "chisel ver wrong: $cv"; exit 1 ;; esac
+          chv=$(chisel-hacked --version 2>&1)
+          case "$chv" in *v1.4.1-hacked*) : ;; *) echo "chisel-hacked ver wrong: $chv"; exit 1 ;; esac
+          # tree + skopeo are holes (no slice yet) -> not checked.
+          for cmd in curl wget git jq file sudo ip docker; do
+              command -v "$cmd" >/dev/null || { echo "missing command: $cmd"; exit 1; }
+          done
+          ;;
+  esac
+
+  echo "ok: $SPREAD_SYSTEM"

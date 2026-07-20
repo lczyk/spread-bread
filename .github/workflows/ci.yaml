@@ -2,12 +2,17 @@ name: CI
 run-name: CI for ${{ github.ref }}
 
 # Build + test on PR and on push to main. No publishing.
+# Rock-only changes are handled by rocks-ci.yaml -- ignore them here.
 
 on:
   pull_request:
+    paths-ignore:
+      - 'rocks/**'
   push:
     branches:
       - main
+    paths-ignore:
+      - 'rocks/**'
   workflow_dispatch:
 
 # Cancel in-flight runs on the same ref when a newer one starts.

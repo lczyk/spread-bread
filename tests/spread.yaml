@@ -91,9 +91,37 @@ backends:
           password: bread
           workers: 2
 
+  # The rock suite (contract-rocks) runs against this backend instead: it
+  # docker-runs the loaded rock directly (the rock is its own sshd host), no
+  # bread-test outer container. Coupled into this one spread.yaml but kept a
+  # separate backend + suite; the docker / rocks ci workflows each filter to
+  # their own backend (outer: vs rock:).
+  rock:
+    type: adhoc
+    allocate: source rock-allocate.sh
+    discard: source rock-discard.sh
+    systems:
+      - bread-24.04-amd64: {username: root, password: bread}
+      - bread-24.04-arm64: {username: root, password: bread}
+      - bread-25.10-amd64: {username: root, password: bread}
+      - bread-25.10-arm64: {username: root, password: bread}
+      - bread-26.04-amd64: {username: root, password: bread}
+      - bread-26.04-arm64: {username: root, password: bread}
+      - bread-chisel-releases-24.04-amd64: {username: root, password: bread}
+      - bread-chisel-releases-24.04-arm64: {username: root, password: bread}
+      - bread-chisel-releases-25.10-amd64: {username: root, password: bread}
+      - bread-chisel-releases-25.10-arm64: {username: root, password: bread}
+      - bread-chisel-releases-26.04-amd64: {username: root, password: bread}
+      - bread-chisel-releases-26.04-arm64: {username: root, password: bread}
+
 suites:
+  # spread has no wildcards in `systems:`, so scope each suite by explicit
+  # name: the bread-image suites whitelist the outer systems; the rock suite
+  # excludes them (leaving the rock backend's systems). this keeps a bare
+  # `spread` from cross-running a suite on the wrong backend.
   contract-bread/:
     summary: bread image contract -- exercises inlined/bread-<ver>.yaml
+    systems: [ubuntu-26.04-amd64, ubuntu-26.04-arm64]
     # task.yaml here will run inner spread against each bread inlined yaml.
     # Variants below pick which version to exercise.
     environment:
@@ -104,8 +132,13 @@ suites:
 
   contract-bread-chisel-releases/:
     summary: bread-chisel-releases image contract
+    systems: [ubuntu-26.04-amd64, ubuntu-26.04-arm64]
     environment:
       INLINED/v24_04: $REPO/inlined/bread-chisel-releases-24.04.yaml
       INLINED/v25_10: $REPO/inlined/bread-chisel-releases-25.10.yaml
       INLINED/v26_04: $REPO/inlined/bread-chisel-releases-26.04.yaml
       INLINED/v26_10: $REPO/inlined/bread-chisel-releases-26.10.yaml
+
+  contract-rocks/:
+    summary: rock contract -- docker-runs each loaded rock + checks it
+    systems: [-ubuntu-26.04-amd64, -ubuntu-26.04-arm64]
