@@ -130,7 +130,7 @@ make build-bread-chisel-releases ARCH=arm64
 regenerate distribution yamls (already committed under `inlined/`, but regenerate after script edits):
 
 ```
-make inlined-yaml-files
+make inline
 ```
 
 run the demo (LTS systems only -- 24.04 + 26.04 x amd64 / arm64). builds the required `bread` images first if missing:
