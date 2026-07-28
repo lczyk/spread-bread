@@ -56,7 +56,7 @@ help:  ## Show this help
 		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-40s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: all
-all: build-all inlined-yaml-files  ## Build all images + generate inlined yamls
+all: build-all inline  ## Build all images + generate inlined yamls
 
 .PHONY: build-all
 build-all: build-bread build-bread-chisel-releases  ## Build all images (narrow via VER=... ARCH=...)
@@ -84,7 +84,7 @@ SPREAD_ARGS ?=
 TEST_STAMPS := .stamp/bread-test-26.04-$(SELECTED_ARCH) \
 	$(foreach v,$(VERSIONS),.stamp/bread-$(v)-$(SELECTED_ARCH) .stamp/bread-chisel-releases-$(v)-$(SELECTED_ARCH))
 .PHONY: test
-test: $(TEST_STAMPS) inlined-yaml-files  ## Run the spread test suite (host arch; ARCH=... to override, SPREAD_ARGS=... for flags)
+test: $(TEST_STAMPS) inline  ## Run the spread test suite (host arch; ARCH=... to override, SPREAD_ARGS=... for flags)
 	cd tests && spread $(SPREAD_ARGS) outer:ubuntu-26.04-$(SELECTED_ARCH)
 
 .PHONY: check-base
@@ -102,8 +102,8 @@ DEMO_STAMPS := $(foreach a,$(NATIVE_ARCHES),.stamp/bread-24.04-$(a) .stamp/bread
 demo: $(DEMO_STAMPS)  ## Run the spread demo on LTS systems (24.04 + 26.04, native arches)
 	$(MAKE) -C demo run
 
-.PHONY: inlined-yaml-files
-inlined-yaml-files: $(INLINED)  ## Generate inlined/*.yaml from templates/*.yaml.in
+.PHONY: inline
+inline: $(INLINED)  ## Generate inlined/*.yaml from templates/*.yaml.in
 
 # Hash-stamp pattern: stamp file contents = hash of all inputs that affect
 # this image. FORCE-dep makes us recompute hash each run; stamp content only

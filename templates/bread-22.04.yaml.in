@@ -11,6 +11,8 @@ exclude:
   - .git
   - .github
 
+repack: source scripts/spread_repack_bread.sh
+
 backends:
   docker:
     type: adhoc

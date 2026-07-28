@@ -1,13 +1,12 @@
 #!/usr/bin/env ruby
 # Inline `source scripts/<name>.sh` references inside spread yaml templates.
 #
-# For each line matching `allocate: source scripts/<name>.sh` or
-# `discard: source scripts/<name>.sh`, substitute the script's content as a
-# yaml block scalar under the matching key.
+# For each line matching `<key>: source scripts/<name>.sh`, substitute the
+# script's content as a yaml block scalar under the matching key.
 
 require "fileutils"
 
-LINE_RE = /\A(?<indent>\s*)(?<key>allocate|discard):\s*source\s+(?<path>scripts\/[\w.-]+\.sh)\s*\z/
+LINE_RE = /\A(?<indent>\s*)(?<key>allocate|discard|repack):\s*source\s+(?<path>scripts\/[\w.-]+\.sh)\s*\z/
 
 def inline_scripts(content, yaml_indent: 2)
   out = []

@@ -50,8 +50,8 @@ jobs:
 
       - name: Assert committed inlined yamls match templates + scripts
         run: |
-          make inlined-yaml-files
+          make inline
           if ! git diff --exit-code inlined/; then
-            echo "::error::inlined/*.yaml is stale -- run 'make inlined-yaml-files' and commit the result"
+            echo "::error::inlined/*.yaml is stale -- run 'make inline' and commit the result"
             exit 1
           fi
