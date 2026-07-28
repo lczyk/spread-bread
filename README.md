@@ -55,12 +55,7 @@ BREAD_NET=publish spread   # force port-publishing (e.g. to test the macOS path 
 BREAD_NET=bridge  spread   # force bridge IPs
 ```
 
-one more macOS gotcha: spread packs the project with the host `tar`, and macOS `tar` injects `._*` AppleDouble sidecar files (resource-fork metadata) into the archive. they unpack as real files in the container and can break tools that scan for `*.yaml` etc. export `COPYFILE_DISABLE=1` so macOS `tar` skips them:
-
-```
-export COPYFILE_DISABLE=1
-spread
-```
+one more macOS gotcha, already handled inside the yamls: spread packs the project with the host `tar`, and macOS `tar` injects a `._*` AppleDouble sidecar (resource-fork metadata) next to every file. they unpack as real files in the container and can break tools that scan for `*.yaml` etc. each yaml carries a `repack:` hook that extracts and re-tars the archive with `COPYFILE_DISABLE=1` when the host is macOS, so nothing needs setting in your environment. note `exclude:` cannot do this -- tar synthesises the sidecars below its own glob filter, so they survive any `--exclude` pattern.
 
 ## install spread
 
