@@ -31,7 +31,9 @@ echo "net mode: $mode"
 
 if [ "$mode" = bridge ]; then
     sleep 0.$RANDOM  # Minimize chances of a race condition
-    export counter_file=".spread-worker-num"
+    # Kept out of the project tree: whatever lives there is packed up and
+    # shipped to every container.
+    export counter_file="${TMPDIR:-/tmp}/spread-bread-worker-num"
     instance_num=$(
         flock -x $counter_file bash -c '
         [ -s $counter_file ] || echo 0 > $counter_file
