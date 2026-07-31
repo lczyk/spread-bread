@@ -5,7 +5,7 @@ if [ "$(uname -s)" = Darwin ]; then
     tmp=$(mktemp -d)
     trap 'rm -rf "$tmp"' EXIT
     tar -xf - -C "$tmp" <&3
-    ( cd "$tmp" && shopt -s dotglob && COPYFILE_DISABLE=1 tar --no-mac-metadata --no-xattrs -cf - -- * ) >&4
+    ( cd "$tmp" && COPYFILE_DISABLE=1 tar --no-mac-metadata --no-xattrs -cf - . ) >&4
 else
     cat <&3 >&4
 fi
