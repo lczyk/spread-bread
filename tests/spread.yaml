@@ -73,7 +73,27 @@ backends:
           --name "$container_name" \
           -d "$image"
 
-      until docker exec "$container_name" pgrep sshd; do sleep 1; done
+      # sshd is up within a second or two. The bound and the liveness check are
+      # backstops: a container that dies on start would otherwise spin here
+      # until spread's own timeout, which reports nothing about the container.
+      sshd_up=""
+      for ((i = 0; i < 60; i++)); do
+          if docker exec "$container_name" pgrep -x sshd >/dev/null 2>&1; then
+              sshd_up=1
+              break
+          fi
+          if ! docker inspect "$container_name" --format '{{.State.Status}}' 2>/dev/null | grep -qx running; then
+              echo "$container_name is not running; reproduce with: docker run --rm --platform linux/$arch $image" >&2
+              docker logs "$container_name" >&2 2>&1 || true
+              exit 1
+          fi
+          sleep 1
+      done
+      if [ -z "$sshd_up" ]; then
+          echo "sshd did not come up in $container_name after 60s" >&2
+          docker logs "$container_name" >&2 2>&1 || true
+          exit 1
+      fi
 
       ADDRESS "$(docker inspect "$container_name" --format '{{.NetworkSettings.Networks.bridge.IPAddress}}')"
 
