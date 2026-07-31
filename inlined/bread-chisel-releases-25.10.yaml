@@ -96,6 +96,7 @@ backends:
           -e "usr=$SPREAD_SYSTEM_USERNAME" \
           -e "pass=$SPREAD_SYSTEM_PASSWORD" \
           $publish_flag \
+          --label spread-bread \
           --name "$container_name" \
           -d "$image"
 
@@ -143,26 +144,20 @@ backends:
       container_name=""
       case "$SPREAD_SYSTEM_ADDRESS" in
           *:*)
-              # publish mode: match the container by its published host port.
+              # publish mode: match the container by its published host port, as it
+              # shows up in the ports column, e.g. "127.0.0.1:32768->22/tcp".
               target_port="${SPREAD_SYSTEM_ADDRESS##*:}"
-              for cid in $(docker ps -a --format '{{.ID}}'); do
-                  if docker port "$cid" 22 2>/dev/null | grep -q ":${target_port}\$"; then
-                      container_name=$(docker inspect "$cid" --format '{{.Name}}' | sed 's#^/##')
-                      break
-                  fi
-              done
+              container_name=$(docker ps -a --filter label=spread-bread --format '{{.Names}} {{.Ports}}' |
+                  awk -v m=":${target_port}->22/" 'index($0, m) { print $1; exit }')
               not_found="No container found with published port: $target_port"
               ;;
           *)
               # bridge mode: match the container by its bridge IP address.
-              for cid in $(docker ps -a --filter "network=bridge" --format '{{.ID}}'); do
-                  cname=$(docker inspect "$cid" --format '{{.Name}}' | sed 's/^\/\(.*\)/\1/')
-                  cip=$(docker inspect "$cid" --format '{{.NetworkSettings.Networks.bridge.IPAddress}}' || echo "")
-                  if [ "$cip" == "$SPREAD_SYSTEM_ADDRESS" ]; then
-                      container_name="$cname"
-                      break
-                  fi
-              done
+              ids=$(docker ps -a --filter label=spread-bread --filter network=bridge --format '{{.ID}}')
+              if [ -n "$ids" ]; then
+                  container_name=$(docker inspect $ids --format '{{.Name}} {{.NetworkSettings.Networks.bridge.IPAddress}}' |
+                      awk -v ip="$SPREAD_SYSTEM_ADDRESS" '$2 == ip { print substr($1, 2); exit }')
+              fi
               not_found="No container found with IP address: $SPREAD_SYSTEM_ADDRESS"
               ;;
       esac

@@ -60,6 +60,7 @@ docker run \
     -e "usr=$SPREAD_SYSTEM_USERNAME" \
     -e "pass=$SPREAD_SYSTEM_PASSWORD" \
     $publish_flag \
+    --label spread-bread \
     --name "$container_name" \
     -d "$image"
 

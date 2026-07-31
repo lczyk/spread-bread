@@ -70,6 +70,7 @@ backends:
           -e DEBIAN_FRONTEND=noninteractive \
           -e "usr=$SPREAD_SYSTEM_USERNAME" \
           -e "pass=$SPREAD_SYSTEM_PASSWORD" \
+          --label spread-bread \
           --name "$container_name" \
           -d "$image"
 
@@ -101,14 +102,11 @@ backends:
       set -e
 
       container_name=""
-      for cid in $(docker ps -a --filter "network=bridge" --format '{{.ID}}'); do
-          cname=$(docker inspect "$cid" --format '{{.Name}}' | sed 's/^\/\(.*\)/\1/')
-          cip=$(docker inspect "$cid" --format '{{.NetworkSettings.Networks.bridge.IPAddress}}' || echo "")
-          if [ "$cip" == "$SPREAD_SYSTEM_ADDRESS" ]; then
-              container_name="$cname"
-              break
-          fi
-      done
+      ids=$(docker ps -a --filter label=spread-bread --filter network=bridge --format '{{.ID}}')
+      if [ -n "$ids" ]; then
+          container_name=$(docker inspect $ids --format '{{.Name}} {{.NetworkSettings.Networks.bridge.IPAddress}}' |
+              awk -v ip="$SPREAD_SYSTEM_ADDRESS" '$2 == ip { print substr($1, 2); exit }')
+      fi
 
       if [ -n "$container_name" ]; then
           echo "Removing outer container: $container_name"
