@@ -156,7 +156,8 @@ shell: .stamp/bread-26.04-$(SELECTED_ARCH)  ## Drop into a bread:26.04 shell (ho
 .PHONY: nuke-spread
 nuke-spread:  ## Kill stray spread processes + force-remove bread containers
 	-pkill spread
-	-$(DOCKER) ps | grep bread | cut -d' ' -f1 | xargs -r $(DOCKER) rm --force
+	-$(DOCKER) ps -aq --filter label=spread-bread | xargs -r $(DOCKER) rm --force
+	-$(DOCKER) ps -aq --filter name='^bread-' | xargs -r $(DOCKER) rm --force
 
 .PHONY: clean
 clean:  ## Remove built images, stamps, generated inlined yamls, cached binaries
