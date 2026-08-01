@@ -1,0 +1,55 @@
+summary: tar shim contract (gnu tar diverted, every spread tar invocation works)
+
+execute: |
+  set -e
+
+  test -x /usr/bin/tar.distrib || {
+      echo "gnu tar not diverted to /usr/bin/tar.distrib"
+      exit 1
+  }
+  test -L /usr/bin/tar || {
+      echo "/usr/bin/tar is not the shim symlink"
+      exit 1
+  }
+  bsdtar --version >/dev/null || {
+      echo "bsdtar missing"
+      exit 1
+  }
+  /bin/tar --version | grep -q "GNU tar" || {
+      echo "tar --version not passed through to gnu tar"
+      exit 1
+  }
+
+  work=$(mktemp -d)
+  trap "rm -rf $work" EXIT
+  mkdir -p "$work/src/a/b"
+  : > "$work/src/a/b/f"
+
+  # Nested entries are what breaks under a host whose emulation the patched
+  # gnu tar trips over.
+  /bin/tar -cf "$work/t.tar" -C "$work/src" a
+  mkdir "$work/out"
+  /bin/tar -xf "$work/t.tar" -C "$work/out"
+  test -f "$work/out/a/b/f" || {
+      echo "nested extraction through /bin/tar failed"
+      exit 1
+  }
+
+  # spread unpacks the project with bare mode letters (`tar xz`), which bsdtar
+  # does not accept unprefixed.
+  /bin/tar -C "$work/src" -czf "$work/t.tgz" a
+  mkdir "$work/out2"
+  ( cd "$work/out2" && /bin/tar xz < "$work/t.tgz" )
+  test -f "$work/out2/a/b/f" || {
+      echo "bare-mode extraction failed"
+      exit 1
+  }
+
+  # ... and packs artifacts with flags only gnu tar has, so creation must never
+  # be routed to bsdtar.
+  /bin/tar -C "$work/src" -cz --sort=name --ignore-failed-read -- a >/dev/null || {
+      echo "gnu-only create flags rejected; shim misrouted creation"
+      exit 1
+  }
+
+  echo "ok: $SPREAD_SYSTEM ($(/usr/local/bin/bread-tar-shim --bread-probe))"
