@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # tar-shim: routes extraction to bsdtar on hosts where GNU tar cannot do it.
 #
 # Installed as /usr/bin/tar, with the real binary diverted to
@@ -77,7 +77,8 @@ if _extracting "$@" && command -v bsdtar >/dev/null 2>&1 && _gnu_tar_broken; the
         (-*) ;;
         (*) _mode="-$1"; shift; set -- "$_mode" "$@" ;;
     esac
-    exec bsdtar --no-xattrs --no-mac-metadata "$@"
+    # -a tar so diagnostics read as tar:, not bsdtar: / tar.distrib:.
+    exec -a tar bsdtar --no-xattrs --no-mac-metadata "$@"
 fi
 
-exec "$_real" "$@"
+exec -a tar "$_real" "$@"
