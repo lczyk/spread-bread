@@ -16,8 +16,12 @@
 # hosts every call is plain GNU tar.
 
 _real=/usr/bin/tar.distrib
-_checked=/run/bread-tar-checked
-_broken=/run/bread-tar-broken
+# Keyed by kernel boot id + arch: /run is an ordinary directory in an image
+# layer, so a verdict cached while the image was being built would otherwise
+# be trusted forever, on every machine that pulls it.
+_marker="/run/bread-tar.$(uname -m).$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || echo unknown)"
+_checked="$_marker.checked"
+_broken="$_marker.broken"
 
 _extracting() {
     # Bare mode letters are only valid as the first argument; elsewhere an x
