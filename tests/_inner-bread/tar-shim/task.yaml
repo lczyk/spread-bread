@@ -20,13 +20,21 @@ execute: |
       exit 1
   }
 
+  # The probe verdict must belong to the machine running the test, not to
+  # whichever builder produced the image.
+  marker="/run/bread-tar.$(uname -m).$(cat /proc/sys/kernel/random/boot_id)"
+  ls /run/bread-tar.* >/dev/null 2>&1 && ! ls /run/bread-tar.* | grep -qF "$marker" && {
+      echo "stale probe markers baked into the image: $(ls /run/bread-tar.*)"
+      exit 1
+  }
+
   work=$(mktemp -d)
   trap "rm -rf $work" EXIT
   mkdir -p "$work/src/a/b"
   : > "$work/src/a/b/f"
 
-  # Nested entries are what breaks under a host whose emulation the patched
-  # gnu tar trips over.
+  # Nested entries are what breaks on a host whose emulation the patched gnu
+  # tar trips over.
   /bin/tar -cf "$work/t.tar" -C "$work/src" a
   mkdir "$work/out"
   /bin/tar -xf "$work/t.tar" -C "$work/out"
@@ -45,10 +53,20 @@ execute: |
       exit 1
   }
 
-  # ... and packs artifacts with flags only gnu tar has, so creation must never
-  # be routed to bsdtar.
-  /bin/tar -C "$work/src" -cz --sort=name --ignore-failed-read -- a >/dev/null || {
-      echo "gnu-only create flags rejected; shim misrouted creation"
+  # ... and packs artifacts with flags only gnu tar has. On a host where the
+  # fallback is active they are dropped, but the archive must still come out.
+  /bin/tar -C "$work/src" -cz --sort=name --ignore-failed-read -- a/b/f > "$work/art.tgz"
+  /bin/tar -tzf "$work/art.tgz" | grep -qx "a/b/f" || {
+      echo "artifact-style creation lost its member"
+      exit 1
+  }
+
+  # Creation from an absolute path takes the same broken code path as nested
+  # extraction (LP #2161288), and must keep gnu's member naming.
+  /bin/tar -cf "$work/abs.tar" "$work/src/a" 2>/dev/null
+  /bin/tar -tf "$work/abs.tar" | grep -qx "${work#/}/src/a/b/f" || {
+      echo "absolute-path creation lost or renamed its members"
+      /bin/tar -tf "$work/abs.tar"
       exit 1
   }
 
