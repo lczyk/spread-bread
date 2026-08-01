@@ -90,11 +90,7 @@ fi
 # hack/tar-shim.sh); say so rather than swapping the tool silently.
 tar_backend=$(docker exec "$container_name" /usr/local/bin/bread-tar-shim --bread-probe 2>/dev/null || echo unknown)
 if [ "$tar_backend" = bsdtar ]; then
-    note="note: gnu tar cannot extract in $container_name (host emulation); using bsdtar"
-    # spread buffers allocate output and only prints it on failure, so the
-    # terminal (when there is one) is the only channel a user actually reads.
-    echo "$note"
-    { [ -w /dev/tty ] && echo "$note" > /dev/tty; } 2>/dev/null || true
+    echo "note: gnu tar cannot extract in $container_name (host emulation); using bsdtar"
 fi
 
 if [ "$mode" = publish ]; then
