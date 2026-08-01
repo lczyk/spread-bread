@@ -1,19 +1,18 @@
 #!/bin/bash
-# tar-shim: routes extraction to bsdtar on hosts where GNU tar cannot do it.
+# tar-shim: routes tar to bsdtar on hosts where GNU tar cannot do the job.
 #
 # Installed as /usr/bin/tar, with the real binary diverted to
 # /usr/bin/tar.distrib. It has to sit on that path rather than earlier in
 # PATH because spread invokes /bin/tar by absolute path.
 #
-# Ubuntu's patched tar (26.04 ships 1.35+dfsg-4ubuntu0.x) resolves extraction
-# paths through a syscall Docker Desktop's Rosetta emulation does not
-# implement, so in an amd64 container on Apple Silicon every entry below the
-# top level fails with ENOSYS -- which spread reports as "cannot send project
-# content", then as a failure to allocate the system. bsdtar is unaffected.
+# Ubuntu's patched tar (26.04 ships 1.35+dfsg-4ubuntu0.x) resolves paths
+# through a syscall Docker Desktop's Rosetta emulation does not implement, so
+# in an amd64 container on Apple Silicon anything below the top level fails
+# with ENOSYS -- extracting a nested entry, and creating an archive from a
+# member name with a directory component alike. bsdtar is unaffected.
 #
-# Only extraction is routed: bsdtar has no --sort=name, which spread passes
-# when packing artifacts. The probe runs once per container, so on unaffected
-# hosts every call is plain GNU tar.
+# The probe runs once per container, so on unaffected hosts every call is
+# plain GNU tar.
 
 _real=/usr/bin/tar.distrib
 # Keyed by kernel boot id + arch: /run is an ordinary directory in an image
@@ -23,21 +22,23 @@ _marker="/run/bread-tar.$(uname -m).$(cat /proc/sys/kernel/random/boot_id 2>/dev
 _checked="$_marker.checked"
 _broken="$_marker.broken"
 
-_extracting() {
+_mode() {
     # Bare mode letters are only valid as the first argument; elsewhere an x
-    # is just as likely to be an option's value.
+    # or a c is as likely to be some option's value.
     case "$1" in
-        (x*) return 0 ;;
+        (x*) echo x; return ;;
+        (c*) echo c; return ;;
     esac
     for _a in "$@"; do
         case "$_a" in
-            (--) return 1 ;;
-            (--extract|--get) return 0 ;;
+            (--) return ;;
+            (--extract|--get) echo x; return ;;
+            (--create) echo c; return ;;
             (--*) ;;
-            (-*x*) return 0 ;;
+            (-*x*) echo x; return ;;
+            (-*c*) echo c; return ;;
         esac
     done
-    return 1
 }
 
 _gnu_tar_broken() {
@@ -59,9 +60,9 @@ _gnu_tar_broken() {
     return 0
 }
 
-# Reports which backend extraction would use, and warms the probe cache. The
-# allocate scripts call it so the fallback shows up in the spread log instead
-# of happening silently.
+# Reports which backend would be used, and warms the probe cache. The allocate
+# scripts call it so the fallback shows up in the spread log instead of
+# happening silently.
 if [ "$1" = --bread-probe ]; then
     if command -v bsdtar >/dev/null 2>&1 && _gnu_tar_broken; then
         echo bsdtar
@@ -71,14 +72,33 @@ if [ "$1" = --bread-probe ]; then
     exit 0
 fi
 
-if _extracting "$@" && command -v bsdtar >/dev/null 2>&1 && _gnu_tar_broken; then
+_bsdtar_mode=$(_mode "$@")
+if [ -n "$_bsdtar_mode" ] && command -v bsdtar >/dev/null 2>&1 && _gnu_tar_broken; then
     # bsdtar has no bare mode letters, and spread sends with `tar xz`.
     case "$1" in
         (-*) ;;
-        (*) _mode="-$1"; shift; set -- "$_mode" "$@" ;;
+        (*) _first="-$1"; shift; set -- "$_first" "$@" ;;
     esac
-    # -a tar so diagnostics read as tar:, not bsdtar: / tar.distrib:.
-    exec -a tar bsdtar --no-xattrs --no-mac-metadata "$@"
+
+    # -a tar so diagnostics read as tar:, not bsdtar: or tar.distrib:.
+    if [ "$_bsdtar_mode" = x ]; then
+        exec -a tar bsdtar --no-xattrs --no-mac-metadata "$@"
+    fi
+
+    # Creating: bsdtar has no equivalent of these, and refuses to run when
+    # given them. Dropping --sort costs archive-order determinism, and
+    # --ignore-failed-read costs a nonzero exit on unreadable members; both
+    # beat not producing an archive at all.
+    _args=()
+    for _a in "$@"; do
+        case "$_a" in
+            (--sort=*|--ignore-failed-read)
+                echo "tar: dropping $_a: not supported by the bsdtar fallback" >&2 ;;
+            (*) _args+=("$_a") ;;
+        esac
+    done
+    # --format first, so an explicit --format from the caller still wins.
+    exec -a tar bsdtar --format=gnutar "${_args[@]}"
 fi
 
 exec -a tar "$_real" "$@"
