@@ -55,6 +55,18 @@ _gnu_tar_broken() {
     return 0
 }
 
+# Reports which backend extraction would use, and warms the probe cache. The
+# allocate scripts call it so the fallback shows up in the spread log instead
+# of happening silently.
+if [ "$1" = --bread-probe ]; then
+    if command -v bsdtar >/dev/null 2>&1 && _gnu_tar_broken; then
+        echo bsdtar
+    else
+        echo gnu
+    fi
+    exit 0
+fi
+
 if _extracting "$@" && command -v bsdtar >/dev/null 2>&1 && _gnu_tar_broken; then
     # bsdtar has no bare mode letters, and spread sends with `tar xz`.
     case "$1" in

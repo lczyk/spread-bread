@@ -86,6 +86,17 @@ if [ -z "$sshd_up" ]; then
     exit 1
 fi
 
+# A container whose gnu tar cannot extract falls back to bsdtar (see
+# hack/tar-shim.sh); say so rather than swapping the tool silently.
+tar_backend=$(docker exec "$container_name" /usr/local/bin/bread-tar-shim --bread-probe 2>/dev/null || echo unknown)
+if [ "$tar_backend" = bsdtar ]; then
+    note="note: gnu tar cannot extract in $container_name (host emulation); using bsdtar"
+    # spread buffers allocate output and only prints it on failure, so the
+    # terminal (when there is one) is the only channel a user actually reads.
+    echo "$note"
+    { [ -w /dev/tty ] && echo "$note" > /dev/tty; } 2>/dev/null || true
+fi
+
 if [ "$mode" = publish ]; then
     # The ephemeral host port docker mapped to the container's sshd.
     port=$(docker port "$container_name" 22 | head -n1 | cut -d: -f2)
