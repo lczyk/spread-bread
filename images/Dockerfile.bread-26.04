@@ -8,7 +8,7 @@ FROM docker.io/library/ubuntu:26.04@sha256:3131b4cc82a783df6c9df078f86e01819a135
 RUN printf 'path-exclude /usr/share/man/*\npath-exclude /usr/share/doc/*\npath-exclude /usr/share/info/*\n' \
         > /etc/dpkg/dpkg.cfg.d/01-nodoc && \
     apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openssh-server && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openssh-server libarchive-tools && \
     mkdir /var/run/sshd || true && \
     echo 'root:bread' | chpasswd && \
     echo "PermitRootLogin yes" >> /etc/ssh/sshd_config && \
@@ -32,6 +32,13 @@ COPY hack/banner.txt        /etc/bread-banner.txt
 COPY hack/bread-warning.sh  /etc/profile.d/00-bread-warning.sh
 RUN chmod 0644 /etc/bread-banner.txt /etc/profile.d/00-bread-warning.sh && \
     printf '\n# bread-warning\n[ -r /etc/profile.d/00-bread-warning.sh ] && . /etc/profile.d/00-bread-warning.sh\n' >> /root/.bashrc
+
+# Extraction shim over /bin/tar, inert unless the host's emulation breaks GNU
+# tar. See hack/tar-shim.sh.
+COPY hack/tar-shim.sh /usr/local/bin/bread-tar-shim
+RUN chmod 0755 /usr/local/bin/bread-tar-shim && \
+    dpkg-divert --local --divert /usr/bin/tar.distrib --rename /usr/bin/tar && \
+    ln -s /usr/local/bin/bread-tar-shim /usr/bin/tar
 
 EXPOSE 22
 CMD ["/usr/sbin/sshd", "-D"]
