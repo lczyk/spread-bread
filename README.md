@@ -55,6 +55,12 @@ BREAD_NET=publish spread   # force port-publishing (e.g. to test the macOS path 
 BREAD_NET=bridge  spread   # force bridge IPs
 ```
 
+### tar under emulation (amd64 on apple silicon)
+
+ubuntu 26.04's patched GNU tar (`1.35+dfsg-4ubuntu0.x`) resolves extraction paths through a syscall Docker Desktop's Rosetta emulation does not implement, so in an amd64 container on apple silicon every archive entry below the top level fails with `Function not implemented`. spread hits this when it unpacks the project, reports `cannot send project content`, and after three tries gives up with `Cannot allocate ... after too many retries`. 26.10 and everything at or below 25.10 are unaffected, as are the qemu-emulated arches.
+
+the images work around it: `/bin/tar` is a shim that probes GNU tar once per container and, if it is broken, routes *extraction* to `bsdtar` (see `hack/tar-shim.sh`). creation stays on GNU tar, which spread needs for `--sort=name` when it packs artifacts. on unaffected hosts the shim is inert.
+
 ## install spread
 
 prefer a precompiled spread CLI over `go install`? same release ships statically-linked binaries for linux amd64 / arm64 / s390x / ppc64le:
@@ -93,6 +99,7 @@ spread-bread/
     hash_inputs.sh               # per-image input hash (drives stamp invalidation)
     check_base.sh                # detect upstream ubuntu base digest drift; rewrite @sha256 pins
     inline_scripts.rb            # splice scripts/*.sh into yaml templates
+    tar-shim.sh                  # image /bin/tar; routes extraction to bsdtar where gnu tar is broken
   scripts/                       # allocate / discard scripts, one pair per flavour
   images/                        # one Dockerfile per (flavour, ubuntu version)
   templates/                     # yaml templates with `source scripts/...` markers
