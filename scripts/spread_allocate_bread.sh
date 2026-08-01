@@ -34,7 +34,9 @@ if [ "$mode" = bridge ]; then
     # snippet thanks to @lengau
     # https://github.com/canonical/charmcraft/blob/120a00a50f7ed3d0ae2fc2bea69e2e43b68b1594/spread.yaml#L72-L79
     sleep 0.$RANDOM  # Minimize chances of a race condition
-    export counter_file=".spread-worker-num"
+    # Kept out of the project tree: whatever lives there is packed up and
+    # shipped to every container.
+    export counter_file="${TMPDIR:-/tmp}/spread-bread-worker-num"
     instance_num=$(
         flock -x $counter_file bash -c '
         [ -s $counter_file ] || echo 0 > $counter_file
@@ -58,10 +60,42 @@ docker run \
     -e "usr=$SPREAD_SYSTEM_USERNAME" \
     -e "pass=$SPREAD_SYSTEM_PASSWORD" \
     $publish_flag \
+    --label spread-bread \
     --name "$container_name" \
     -d "$image"
 
-until docker exec "$container_name" pgrep sshd; do sleep 1; done
+# sshd is up within a second or two. The bound and the liveness check are
+# backstops: a container that dies on start would otherwise spin here until
+# spread's own timeout, which reports nothing about the container.
+sshd_up=""
+for ((i = 0; i < 60; i++)); do
+    if docker exec "$container_name" pgrep -x sshd >/dev/null 2>&1; then
+        sshd_up=1
+        break
+    fi
+    if ! docker inspect "$container_name" --format '{{.State.Status}}' 2>/dev/null | grep -qx running; then
+        echo "$container_name is not running; reproduce with: docker run --rm --platform linux/$arch $image" >&2
+        docker logs "$container_name" >&2 2>&1 || true
+        exit 1
+    fi
+    sleep 1
+done
+if [ -z "$sshd_up" ]; then
+    echo "sshd did not come up in $container_name after 60s" >&2
+    docker logs "$container_name" >&2 2>&1 || true
+    exit 1
+fi
+
+# A container whose gnu tar cannot extract falls back to bsdtar (see
+# hack/tar-shim.sh); say so rather than swapping the tool silently.
+tar_backend=$(docker exec "$container_name" /usr/local/bin/bread-tar-shim --bread-probe 2>/dev/null || echo unknown)
+if [ "$tar_backend" = bsdtar ]; then
+    note="note: gnu tar cannot extract in $container_name (host emulation); using bsdtar"
+    # spread buffers allocate output and only prints it on failure, so the
+    # terminal (when there is one) is the only channel a user actually reads.
+    echo "$note"
+    { [ -w /dev/tty ] && echo "$note" > /dev/tty; } 2>/dev/null || true
+fi
 
 if [ "$mode" = publish ]; then
     # The ephemeral host port docker mapped to the container's sshd.

@@ -39,6 +39,7 @@ case "$flavour" in
             "images/Dockerfile.bread-$ver"
             "hack/bread-warning.sh"
             "hack/banner.txt"
+            "hack/tar-shim.sh"
         )
         ;;
     bread-chisel-releases)

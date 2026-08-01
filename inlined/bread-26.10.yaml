@@ -12,13 +12,14 @@ exclude:
   - .github
 
 repack: |
-  # macOS tar packs an AppleDouble ._* sidecar next to every file; they unpack as
-  # real files on the remote. Repack to remove them.
+  # macOS tar packs an AppleDouble ._* sidecar next to every file and stores
+  # xattrs as pax headers; the sidecars unpack as real files on the remote and
+  # GNU tar warns about every xattr header. Repack to remove both.
   if [ "$(uname -s)" = Darwin ]; then
       tmp=$(mktemp -d)
       trap 'rm -rf "$tmp"' EXIT
       tar -xf - -C "$tmp" <&3
-      ( cd "$tmp" && shopt -s dotglob && COPYFILE_DISABLE=1 tar -cf - -- * ) >&4
+      ( cd "$tmp" && COPYFILE_DISABLE=1 tar --no-mac-metadata --no-xattrs -cf - . ) >&4
   else
       cat <&3 >&4
   fi
@@ -63,7 +64,9 @@ backends:
           # snippet thanks to @lengau
           # https://github.com/canonical/charmcraft/blob/120a00a50f7ed3d0ae2fc2bea69e2e43b68b1594/spread.yaml#L72-L79
           sleep 0.$RANDOM  # Minimize chances of a race condition
-          export counter_file=".spread-worker-num"
+          # Kept out of the project tree: whatever lives there is packed up and
+          # shipped to every container.
+          export counter_file="${TMPDIR:-/tmp}/spread-bread-worker-num"
           instance_num=$(
               flock -x $counter_file bash -c '
               [ -s $counter_file ] || echo 0 > $counter_file
@@ -87,10 +90,42 @@ backends:
           -e "usr=$SPREAD_SYSTEM_USERNAME" \
           -e "pass=$SPREAD_SYSTEM_PASSWORD" \
           $publish_flag \
+          --label spread-bread \
           --name "$container_name" \
           -d "$image"
 
-      until docker exec "$container_name" pgrep sshd; do sleep 1; done
+      # sshd is up within a second or two. The bound and the liveness check are
+      # backstops: a container that dies on start would otherwise spin here until
+      # spread's own timeout, which reports nothing about the container.
+      sshd_up=""
+      for ((i = 0; i < 60; i++)); do
+          if docker exec "$container_name" pgrep -x sshd >/dev/null 2>&1; then
+              sshd_up=1
+              break
+          fi
+          if ! docker inspect "$container_name" --format '{{.State.Status}}' 2>/dev/null | grep -qx running; then
+              echo "$container_name is not running; reproduce with: docker run --rm --platform linux/$arch $image" >&2
+              docker logs "$container_name" >&2 2>&1 || true
+              exit 1
+          fi
+          sleep 1
+      done
+      if [ -z "$sshd_up" ]; then
+          echo "sshd did not come up in $container_name after 60s" >&2
+          docker logs "$container_name" >&2 2>&1 || true
+          exit 1
+      fi
+
+      # A container whose gnu tar cannot extract falls back to bsdtar (see
+      # hack/tar-shim.sh); say so rather than swapping the tool silently.
+      tar_backend=$(docker exec "$container_name" /usr/local/bin/bread-tar-shim --bread-probe 2>/dev/null || echo unknown)
+      if [ "$tar_backend" = bsdtar ]; then
+          note="note: gnu tar cannot extract in $container_name (host emulation); using bsdtar"
+          # spread buffers allocate output and only prints it on failure, so the
+          # terminal (when there is one) is the only channel a user actually reads.
+          echo "$note"
+          { [ -w /dev/tty ] && echo "$note" > /dev/tty; } 2>/dev/null || true
+      fi
 
       if [ "$mode" = publish ]; then
           # The ephemeral host port docker mapped to the container's sshd.
@@ -114,26 +149,20 @@ backends:
       container_name=""
       case "$SPREAD_SYSTEM_ADDRESS" in
           *:*)
-              # publish mode: match the container by its published host port.
+              # publish mode: match the container by its published host port, as it
+              # shows up in the ports column, e.g. "127.0.0.1:32768->22/tcp".
               target_port="${SPREAD_SYSTEM_ADDRESS##*:}"
-              for cid in $(docker ps -a --format '{{.ID}}'); do
-                  if docker port "$cid" 22 2>/dev/null | grep -q ":${target_port}\$"; then
-                      container_name=$(docker inspect "$cid" --format '{{.Name}}' | sed 's#^/##')
-                      break
-                  fi
-              done
+              container_name=$(docker ps -a --filter label=spread-bread --format '{{.Names}} {{.Ports}}' |
+                  awk -v m=":${target_port}->22/" 'index($0, m) { print $1; exit }')
               not_found="No container found with published port: $target_port"
               ;;
           *)
               # bridge mode: match the container by its bridge IP address.
-              for cid in $(docker ps -a --filter "network=bridge" --format '{{.ID}}'); do
-                  cname=$(docker inspect "$cid" --format '{{.Name}}' | sed 's/^\/\(.*\)/\1/')
-                  cip=$(docker inspect "$cid" --format '{{.NetworkSettings.Networks.bridge.IPAddress}}' || echo "")
-                  if [ "$cip" == "$SPREAD_SYSTEM_ADDRESS" ]; then
-                      container_name="$cname"
-                      break
-                  fi
-              done
+              ids=$(docker ps -a --filter label=spread-bread --filter network=bridge --format '{{.ID}}')
+              if [ -n "$ids" ]; then
+                  container_name=$(docker inspect $ids --format '{{.Name}} {{.NetworkSettings.Networks.bridge.IPAddress}}' |
+                      awk -v ip="$SPREAD_SYSTEM_ADDRESS" '$2 == ip { print substr($1, 2); exit }')
+              fi
               not_found="No container found with IP address: $SPREAD_SYSTEM_ADDRESS"
               ;;
       esac
