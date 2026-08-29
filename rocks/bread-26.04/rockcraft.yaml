@@ -1,0 +1,126 @@
+# spellchecker: ignore rockcraft chiselled coreutils passwd nologin sshd usrmerge pebble noninteractive
+
+name: bread
+version: "26.04"
+summary: chiselled ubuntu 26.04 + sshd spread test-host rock
+description: |
+    Throwaway spread test-host: a chiselled (base: bare) Ubuntu 26.04 rock with
+    just enough to act as a spread system -- bash, coreutils, openssh-server,
+    apt, and a pam_permit-only auth stack (accepts ANY password for root).
+
+    INSECURE BY DESIGN. Built for ephemeral spread test containers only; never
+    expose to a network or use in production.
+
+base: bare
+build-base: ubuntu@26.04
+
+platforms:
+  amd64:
+  arm64:
+
+# sshd runs as a pebble service (pebble is pid 1 in the rock). The
+# openssh-server_services slice ships systemd units, not a pebble layer, so we
+# drive sshd ourselves via hack/sshd-entry.sh (host-key gen + exec sshd -D).
+services:
+  sshd:
+    override: replace
+    command: /usr/local/bin/sshd-entry.sh
+    startup: enabled
+
+parts:
+  bread:
+    # We chisel-cut the slices ourselves rather than using stage-packages:
+    # rockcraft's stage-packages cut has no retry, and the chisel-releases
+    # archive intermittently flakes ("expected digest ..."). hack/chisel_cut.sh
+    # retries around that. (Pattern from not-quite-rust-rock.)
+    plugin: nil
+    build-snaps:
+      - chisel
+    build-packages:
+      - git
+    override-build: |
+      set -eu
+
+      releases=$(mktemp -d)
+      git clone --depth 1 --branch ubuntu-26.04 \
+          https://github.com/canonical/chisel-releases.git "$releases"
+
+      # OpenSSH >=9.8 (this release) re-execs sshd-session + sshd-auth per
+      # connection; the openssh-server slice ships only /usr/sbin/sshd, so sshd
+      # exits 255 at startup. Add them to the cloned slice before cutting.
+      # (24.04's OpenSSH 9.6 predates the split and has no such binaries.)
+      sed -i \
+          -e '\#^      /usr/sbin/sshd:#a\      /usr/lib/openssh/sshd-session:' \
+          -e '\#^      /usr/sbin/sshd:#a\      /usr/lib/openssh/sshd-auth:' \
+          "$releases/slices/openssh-server.yaml"
+
+      # tar + gzip: needed by spread to sync the project onto the system over
+      # ssh (not part of coreutils). dpkg_bins: apt_apt-get only pulls
+      # dpkg_maintscript-support, so apt-get install can't unpack without it.
+      # pam: only libpam-modules_libs (carries pam_permit.so) -- NOT the
+      # _config / _pam-config default stacks.
+      bash "$CRAFT_PROJECT_DIR/hack/chisel_cut.sh" "$releases" \
+          base-files_base base-files_etc base-files_var base-files_tmp \
+          base-files_lib base-files_home base-files_release-info base-files_chisel \
+          bash_bins coreutils_bins tar_bins gzip_bins \
+          base-passwd_data login_bins passwd_bins \
+          openssh-server_bins openssh-server_config ca-certificates_data \
+          libpam-modules_libs \
+          apt_apt-get apt_config apt_var apt_default-source-list dpkg_bins
+
+      cd "$CRAFT_PART_INSTALL"
+
+      # --- users: base-passwd_data gives us /etc/passwd + /etc/group (incl
+      # root), but not the sshd privsep user nor any /etc/shadow. add both.
+      grep -q '^sshd:' etc/passwd || \
+          echo 'sshd:x:101:65534::/run/sshd:/usr/sbin/nologin' >> etc/passwd
+      # root password "bread" (matches the docker-image flavour). pam_permit
+      # makes the value irrelevant for auth, but root must not be locked.
+      hash=$(openssl passwd -6 bread)
+      {
+          printf 'root:%s:20000:0:99999:7:::\n' "$hash"
+          printf 'sshd:!:20000:0:99999:7:::\n'
+      } > etc/shadow
+      chmod 0640 etc/shadow
+
+      # --- sshd config. openssh-server_config ships sshd_config.d/ but not
+      # /etc/ssh/sshd_config itself, so write a minimal one.
+      mkdir -p etc/ssh
+      cat > etc/ssh/sshd_config <<'EOF'
+      PermitRootLogin yes
+      PasswordAuthentication yes
+      UsePAM yes
+      Subsystem sftp /usr/lib/openssh/sftp-server
+      PidFile /run/sshd.pid
+      EOF
+
+      # --- pam: permit-only stack (always-allow), verbatim shape from the
+      # docker-image flavour.
+      mkdir -p etc/pam.d
+      printf '%s\n' \
+          'auth     required pam_permit.so' \
+          'account  required pam_permit.so' \
+          'session  required pam_permit.so' \
+          'password required pam_permit.so' \
+          > etc/pam.d/sshd
+
+      # --- /etc/profile: base-files ships profile.d/ but not /etc/profile, so
+      # login shells wouldn't source the bread-warning banner. add a minimal one.
+      cat > etc/profile <<'EOF'
+      if [ -d /etc/profile.d ]; then
+          for __pf in /etc/profile.d/*.sh; do
+              [ -r "$__pf" ] && . "$__pf"
+          done
+          unset __pf
+      fi
+      EOF
+
+      # --- bread bits: sshd entrypoint, lazy-apt shim, insecure-image banner.
+      install -D -m0755 "$CRAFT_PROJECT_DIR/hack/sshd-entry.sh" usr/local/bin/sshd-entry.sh
+      install -D -m0755 "$CRAFT_PROJECT_DIR/hack/lazy-apt.sh"   usr/local/bin/apt-get
+      install    -m0755 "$CRAFT_PROJECT_DIR/hack/lazy-apt.sh"   usr/local/bin/apt
+      install -D -m0644 "$CRAFT_PROJECT_DIR/hack/banner.txt"        etc/bread-banner.txt
+      install -D -m0644 "$CRAFT_PROJECT_DIR/hack/bread-warning.sh"  etc/profile.d/00-bread-warning.sh
+      mkdir -p root
+      printf '\n# bread-warning\n[ -r /etc/profile.d/00-bread-warning.sh ] && . /etc/profile.d/00-bread-warning.sh\n' \
+          >> root/.bashrc
