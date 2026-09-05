@@ -1,6 +1,6 @@
 # Bread image: Ubuntu 22.04 + sshd only.
 
-FROM docker.io/library/ubuntu:22.04@sha256:0e0a0fc6d18feda9db1590da249ac93e8d5abfea8f4c3c0c849ce512b5ef8982
+FROM docker.io/library/ubuntu:22.04@sha256:2edbbc5dc405e9612ba3584ce95480277e3eb374407b5505fe26f17df77c7dbc
 
 # Skip man/doc/info install for every subsequent package -- dpkg's man-db
 # trigger is a major cost under qemu emulation (s390x / ppc64le). Persists in
