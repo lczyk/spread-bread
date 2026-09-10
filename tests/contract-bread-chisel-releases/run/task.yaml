@@ -23,6 +23,10 @@ execute: |
   mkdir -p "$work/tests/spread/integration"
   cp -r "$REPO/tests/_inner-bread-chisel-releases/." "$work/tests/spread/integration"
 
+  # The yaml's restore-each hook calls clean-rootfs from tests/spread/lib.
+  mkdir -p "$work/tests/spread/lib"
+  cp "$REPO/tests/lib/clean-rootfs" "$work/tests/spread/lib/"
+
   cd "$work"
 
   # Filter inner spread to outer's arch -- ci per-arch jobs only build

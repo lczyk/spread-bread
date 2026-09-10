@@ -37,6 +37,14 @@ execute: |
       exit 1
   }
 
+  # chisel-releases' install-slices refuses to run without ROOTFS_DIR; the
+  # 25.10 branch predates it. The restore-each hook that sweeps it is checked
+  # by spread itself, which fails the task when clean-rootfs does not resolve.
+  if [ "$expected_ver" != 25.10 ] && [ "${ROOTFS_DIR:-}" != /tmp/chisel-rootfs ]; then
+      echo "ROOTFS_DIR: expected=/tmp/chisel-rootfs got=${ROOTFS_DIR:-unset}"
+      exit 1
+  fi
+
   for cmd in curl wget git jq file sudo tree docker skopeo; do
       command -v "$cmd" >/dev/null || {
           echo "missing command: $cmd"

@@ -5,6 +5,8 @@ path: /chisel-releases
 environment:
   PROJECT_PATH: /chisel-releases
   SHARED_LIBRARIES: $PROJECT_PATH/tests/spread/lib
+  # Rootfs'es share one directory so that clean-rootfs can sweep them between tasks.
+  ROOTFS_DIR: /tmp/chisel-rootfs
   PATH: /snap/bin:$PATH:$SHARED_LIBRARIES
   # NOTE: empty by default; opt in per-run with `CHISEL_HACKS=1 spread ...`.
   # $(HOST:...) forwards the host env var into the remote (spread sends only
@@ -194,6 +196,11 @@ backends:
           password: bread
           workers: 4
 
+# One instance serves every task of a run, so rootfs'es have to go as they finish.
+restore-each: clean-rootfs
+
 suites:
   tests/spread/integration/:
     summary: Tests common scenarios
+
+kill-timeout: 1.5h
