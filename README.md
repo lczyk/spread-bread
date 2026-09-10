@@ -23,7 +23,7 @@ prebuilt docker images + ready-to-use spread yamls so you can drop Canonical [`s
 two image flavours, each for ubuntu 22.04, 24.04, 25.10, 26.04, 26.10 x amd64 / arm64 / s390x / ppc64le, published as multiarch tags at `ghcr.io/lczyk/spread-bread/<flavour>:<ver>`. heads-up: s390x + ppc64le images build under qemu and ship untested (no native runners); amd64 + arm64 are tested on every release:
 
 - **`bread`** -- base: ubuntu + sshd. general-purpose spread system; the test suite installs whatever else it needs.
-- **`bread-chisel-releases`** -- bread + `chisel` + the shell + container tooling typically needed by [chisel-releases](https://github.com/canonical/chisel-releases) spread tests (curl, wget, git, jq, file, sudo, tree, docker, skopeo). `chisel` and `docker` are built from source (canonical/chisel pinned by SHA, docker/cli pinned by version tag) so the bundled binaries are go 1.25+ and survive qemu emulation.
+- **`bread-chisel-releases`** -- bread + `chisel` + the shell + container tooling typically needed by [chisel-releases](https://github.com/canonical/chisel-releases) spread tests (curl, wget, git, jq, file, sudo, tree, docker, skopeo). `chisel` and `docker` are built from source (canonical/chisel + docker/cli pinned by version tag) so the bundled binaries are go 1.25+ and survive qemu emulation.
 
 ## using (the common case)
 
@@ -114,6 +114,7 @@ spread-bread/
     Dockerfile.bread-test-26.04  # test-host image: bread:26.04 + docker + spread (not published)
     contract-{bread,bread-chisel-releases}/run/task.yaml
     _inner-{bread,bread-chisel-releases}/contract/task.yaml
+    lib/clean-rootfs             # stand-in for the chisel-releases lib the inlined yamls' restore-each calls
   .github/workflows/             # ci (build + test) on PR / push to main; release on r* tag; daily base-refresh
 ```
 
