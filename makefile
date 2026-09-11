@@ -11,7 +11,7 @@ GO_BUILDER_IMAGE := ubuntu/go:1.25-26.04_edge
 # Docker CLI built from docker/cli source at tag v$(DOCKER_VERSION); ubuntu
 # apt's docker.io is built with go 1.24 and crashes under qemu emulation, and
 # docker.com's static tarballs don't cover s390x / ppc64le.
-DOCKER_VERSION := 29.5.2
+DOCKER_VERSION := 29.8.0
 
 # Full matrix.
 VERSIONS := 22.04 24.04 25.10 26.04 26.10
