@@ -40,6 +40,7 @@ case "$flavour" in
             "hack/bread-warning.sh"
             "hack/banner.txt"
             "hack/tar-shim.sh"
+            "hack/apt-mirror.sh"
         )
         ;;
     bread-chisel-releases)

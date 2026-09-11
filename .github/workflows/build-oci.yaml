@@ -37,6 +37,12 @@ jobs:
     runs-on: ${{ matrix.runner }}
     # NOTE: 90 min covers the qemu lanes; native lanes finish well under 30.
     timeout-minutes: 90
+    # apt inside `docker build` defaults to archive.ubuntu.com; the runner
+    # itself uses the azure mirror with archive as fallback. Same mirror, same
+    # failover, applied for the build only (hack/apt-mirror.sh):
+    # https://github.com/actions/runner-images/blob/main/images/ubuntu/scripts/build/configure-apt-sources.sh
+    env:
+      APT_MIRROR: http://azure.archive.ubuntu.com/ubuntu/
 
     steps:
       - name: Checkout repository
@@ -58,7 +64,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: images-out/
-          key: images-${{ matrix.arch }}-${{ hashFiles('images/Dockerfile.*', 'hack/bread-warning.sh', 'hack/banner.txt', 'hack/lazy-apt.sh', 'hack/build_image.sh', '.stamp/binaries') }}
+          key: images-${{ matrix.arch }}-${{ hashFiles('images/Dockerfile.*', 'hack/bread-warning.sh', 'hack/banner.txt', 'hack/lazy-apt.sh', 'hack/apt-mirror.sh', 'hack/build_image.sh', '.stamp/binaries') }}
 
       - name: Set up qemu (emulated arches only)
         if: matrix.qemu && steps.images-cache.outputs.cache-hit != 'true'

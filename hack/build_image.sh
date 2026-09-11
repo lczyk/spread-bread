@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Build one image if its input hash differs from the stamp.
 # Usage: build_image.sh <flavour-ver-arch>
+# Optional env: APT_MIRROR -- build-time apt mirror, see hack/apt-mirror.sh.
 #   flavour-ver-arch examples:
 #     bread-24.04-amd64
 #     bread-chisel-releases-25.10-arm64
@@ -30,6 +31,7 @@ case "$flavour" in
     bread)
         docker build \
             --tag "bread:$ver-$arch" \
+            --build-arg "APT_MIRROR=${APT_MIRROR:-}" \
             --file "images/Dockerfile.bread-$ver" \
             --platform "linux/$arch" \
             .
@@ -38,6 +40,7 @@ case "$flavour" in
         docker build \
             --tag "bread-chisel-releases:$ver-$arch" \
             --build-arg "BASE_TAG=$ver-$arch" \
+            --build-arg "APT_MIRROR=${APT_MIRROR:-}" \
             --build-arg "BUILD_ARCH=$arch" \
             --file "images/Dockerfile.bread-chisel-releases-$ver" \
             --platform "linux/$arch" \
