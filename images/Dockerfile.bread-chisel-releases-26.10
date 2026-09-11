@@ -14,7 +14,8 @@ ARG BUILD_ARCH
 # https://github.com/actions/runner-images/blob/main/images/ubuntu/scripts/build/configure-apt-sources.sh
 ARG APT_MIRROR=
 
-RUN bread-apt-mirror on && \
+RUN --mount=type=bind,source=hack/apt-mirror.sh,target=/usr/local/bin/bread-apt-mirror \
+    bread-apt-mirror on && \
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         curl wget git jq file sudo tree \

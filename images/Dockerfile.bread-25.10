@@ -6,12 +6,12 @@ FROM docker.io/library/ubuntu:25.10@sha256:7cc5e35f6567ee8c66d2abb4aab0fd866669e
 # Mirrors what the hosted runners do for themselves:
 # https://github.com/actions/runner-images/blob/main/images/ubuntu/scripts/build/configure-apt-sources.sh
 ARG APT_MIRROR=
-COPY hack/apt-mirror.sh /usr/local/bin/bread-apt-mirror
 
 # Skip man/doc/info install for every subsequent package -- dpkg's man-db
 # trigger is a major cost under qemu emulation (s390x / ppc64le). Persists in
 # the image fs, so the bread-chisel-releases install inherits the exclusion.
-RUN bread-apt-mirror on && \
+RUN --mount=type=bind,source=hack/apt-mirror.sh,target=/usr/local/bin/bread-apt-mirror \
+    bread-apt-mirror on && \
     printf 'path-exclude /usr/share/man/*\npath-exclude /usr/share/doc/*\npath-exclude /usr/share/info/*\n' \
         > /etc/dpkg/dpkg.cfg.d/01-nodoc && \
     apt-get update && \

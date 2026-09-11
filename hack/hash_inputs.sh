@@ -47,6 +47,7 @@ case "$flavour" in
         inputs=(
             "images/Dockerfile.bread-chisel-releases-$ver"
             "hack/lazy-apt.sh"
+            "hack/apt-mirror.sh"
             ".stamp/bread-$ver-$arch"
             ".stamp/binaries"
         )
