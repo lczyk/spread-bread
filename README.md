@@ -100,6 +100,7 @@ spread-bread/
     check_base.sh                # detect upstream ubuntu base digest drift; rewrite @sha256 pins
     inline_scripts.rb            # splice scripts/*.sh into yaml templates
     tar-shim.sh                  # image /bin/tar; routes extraction to bsdtar where gnu tar is broken
+    apt-mirror.sh                # build-time apt mirror override, bind-mounted into image builds by ci
   scripts/                       # allocate / discard scripts, one pair per flavour
   images/                        # one Dockerfile per (flavour, ubuntu version)
   templates/                     # yaml templates with `source scripts/...` markers

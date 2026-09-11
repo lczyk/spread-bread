@@ -43,12 +43,14 @@ case "$flavour" in
             "hack/bread-warning.sh"
             "hack/banner.txt"
             "hack/tar-shim.sh"
+            "hack/apt-mirror.sh"
         )
         ;;
     bread-chisel-releases)
         inputs=(
             "images/Dockerfile.bread-chisel-releases-$ver"
             "hack/lazy-apt.sh"
+            "hack/apt-mirror.sh"
             ".stamp/bread-$ver-$arch"
             ".stamp/binaries-$arch"
         )
