@@ -4,7 +4,7 @@
 #
 # Usage:
 #   hash_inputs.sh <flavour-ver-arch>     # for image stamps
-#   hash_inputs.sh binaries               # for cache/binaries stamp
+#   hash_inputs.sh binaries-<arch>        # for the per-arch cache/binaries stamp
 #
 # Stdout: hex digest only.
 set -euo pipefail
@@ -13,20 +13,23 @@ cd "$(dirname "$0")/.."
 
 name="$1"
 
-if [ "$name" = "binaries" ]; then
-    # Binary cache hash combines:
-    #   - hack/build_binaries.sh content (drives how things build)
-    #   - CHISEL_REF + SPREAD_REF + GO_BUILDER_IMAGE env vars (drive what is built)
-    : "${CHISEL_REF:?required}"
-    : "${SPREAD_REF:?required}"
-    : "${GO_BUILDER_IMAGE:?required}"
-    : "${DOCKER_VERSION:?required}"
-    { sha256sum hack/build_binaries.sh patches/chisel/*.patch; \
-      printf 'CHISEL_REF=%s\nSPREAD_REF=%s\nGO_BUILDER_IMAGE=%s\nDOCKER_VERSION=%s\n' \
-          "$CHISEL_REF" "$SPREAD_REF" "$GO_BUILDER_IMAGE" "$DOCKER_VERSION"; \
-    } | sha256sum | cut -d' ' -f1
-    exit 0
-fi
+case "$name" in
+    binaries-*)
+        # Binary cache hash combines:
+        #   - hack/build_binaries.sh + the chisel patches (drive how things build)
+        #   - CHISEL_REF + SPREAD_REF + GO_BUILDER_IMAGE + DOCKER_VERSION (drive what is built)
+        #   - the target arch
+        : "${CHISEL_REF:?required}"
+        : "${SPREAD_REF:?required}"
+        : "${GO_BUILDER_IMAGE:?required}"
+        : "${DOCKER_VERSION:?required}"
+        { sha256sum hack/build_binaries.sh patches/chisel/*.patch; \
+          printf 'ARCH=%s\nCHISEL_REF=%s\nSPREAD_REF=%s\nGO_BUILDER_IMAGE=%s\nDOCKER_VERSION=%s\n' \
+              "${name#binaries-}" "$CHISEL_REF" "$SPREAD_REF" "$GO_BUILDER_IMAGE" "$DOCKER_VERSION"; \
+        } | sha256sum | cut -d' ' -f1
+        exit 0
+        ;;
+esac
 
 arch="${name##*-}"
 rest="${name%-*}"
@@ -49,14 +52,14 @@ case "$flavour" in
             "hack/lazy-apt.sh"
             "hack/apt-mirror.sh"
             ".stamp/bread-$ver-$arch"
-            ".stamp/binaries"
+            ".stamp/binaries-$arch"
         )
         ;;
     bread-test)
         inputs=(
             "tests/Dockerfile.bread-test-$ver"
             ".stamp/bread-$ver-$arch"
-            ".stamp/binaries"
+            ".stamp/binaries-$arch"
         )
         ;;
     *)

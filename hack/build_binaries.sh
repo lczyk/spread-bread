@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cross-compile chisel + spread + docker cli for all target arches inside a
+# Cross-compile chisel + spread + docker cli for the target arches inside a
 # single Canonical ubuntu/go:1.25-26.04_edge container. Output binaries land
 # in ./cache/binaries/{chisel,chisel-hacked,spread,docker}-<arch>.
 #
@@ -7,6 +7,9 @@
 #   CHISEL_REF        git ref (tag, branch, or SHA) for canonical/chisel
 #   SPREAD_REF        git ref for canonical/spread
 #   GO_BUILDER_IMAGE  builder image tag
+#   DOCKER_VERSION    docker/cli tag, without the leading v
+# Optional:
+#   TARGET_ARCHES     space-separated GOARCH list (default: all four)
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -15,6 +18,7 @@ cd "$(dirname "$0")/.."
 : "${SPREAD_REF:?required}"
 : "${GO_BUILDER_IMAGE:?required}"
 : "${DOCKER_VERSION:?required}"
+TARGET_ARCHES="${TARGET_ARCHES:-amd64 arm64 s390x ppc64le}"
 
 mkdir -p cache/binaries
 
@@ -28,13 +32,13 @@ docker run --rm \
     -e CHISEL_REF="$CHISEL_REF" \
     -e SPREAD_REF="$SPREAD_REF" \
     -e DOCKER_VERSION="$DOCKER_VERSION" \
+    -e TARGET_ARCHES="$TARGET_ARCHES" \
     -e HUID="$HUID" \
     -e HGID="$HGID" \
     "$GO_BUILDER_IMAGE" -ceuo pipefail '
 # Builder runs natively on host arch and cross-compiles via GOARCH for
-# the other arches. Both binaries are pure Go (no CGO), so cross-compile
+# each target arch. All binaries are pure Go (no CGO), so cross-compile
 # is clean.
-TARGET_ARCHES="amd64 arm64 s390x ppc64le"
 
 # Canonical ubuntu/go image has /usr/bin/go as a broken symlink in some
 # revisions; pick the actual go binary out of /usr/lib/go-*/bin.

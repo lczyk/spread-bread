@@ -70,19 +70,18 @@ build-bread-chisel-releases: $(CHISEL_STAMPS)  ## Build bread-chisel-releases im
 .PHONY: build-bread-test
 build-bread-test: $(BREAD_TEST_STAMPS)  ## Build the bread-test (26.04 only, native arches) test-host image
 
+.PHONY: binaries
+binaries: $(addprefix .stamp/binaries-,$(SELECTED_ARCHES))  ## Cross-compile chisel + spread + docker cli (narrow via ARCH=...)
+
 # Run the contract/integration spread suite (tests/spread.yaml). Builds the
 # test-host image + inlined yamls first. Pass extra spread args via SPREAD_ARGS,
 # e.g. make test SPREAD_ARGS='-debug'.
 SPREAD_ARGS ?=
 # The contract-bread-chisel-releases run task allocates the per-version
 # bread-chisel-releases:<ver>-<arch> images via the host docker socket, so all
-# four versions (host arch) must exist before the suite runs.
-# List the bread base stamps explicitly (not just via the chisel-releases
-# prereq) so make builds them as direct goals -- the .stamp/bread-% pattern
-# also matches bread-chisel-releases-%, so chained-implicit base builds are
-# unreliable.
+# versions (host arch) must exist before the suite runs.
 TEST_STAMPS := .stamp/bread-test-26.04-$(SELECTED_ARCH) \
-	$(foreach v,$(VERSIONS),.stamp/bread-$(v)-$(SELECTED_ARCH) .stamp/bread-chisel-releases-$(v)-$(SELECTED_ARCH))
+	$(foreach v,$(VERSIONS),.stamp/bread-chisel-releases-$(v)-$(SELECTED_ARCH))
 .PHONY: test
 test: $(TEST_STAMPS) inline  ## Run the spread test suite (host arch; ARCH=... to override, SPREAD_ARGS=... for flags)
 	cd tests && spread $(SPREAD_ARGS) outer:ubuntu-26.04-$(SELECTED_ARCH)
@@ -112,35 +111,47 @@ inline: $(INLINED)  ## Generate inlined/*.yaml from templates/*.yaml.in
 .PHONY: FORCE
 FORCE:
 
-.PRECIOUS: .stamp/bread-% .stamp/bread-chisel-releases-% .stamp/bread-test-% .stamp/binaries
+.PRECIOUS: .stamp/bread-% .stamp/bread-chisel-releases-% .stamp/bread-test-% .stamp/binaries-%
 
 .stamp:
 	@mkdir -p $@
 
-# Cross-compile chisel + spread for both arches via a single
-# Canonical ubuntu/go:1.25-26.04_edge builder container. Stamp content =
-# hash of inputs (CHISEL_REF + SPREAD_REF + builder image + script).
+# Static pattern rules over the full matrix: an implicit .stamp/bread-% would
+# also match bread-chisel-releases-* and win whenever a prerequisite stamp is
+# not on disk yet.
+FULL_BINARIES_STAMPS := $(addprefix .stamp/binaries-,$(ARCHES))
+FULL_BREAD_STAMPS    := $(addprefix .stamp/bread-,$(FULL_VER_ARCH))
+FULL_CHISEL_STAMPS   := $(addprefix .stamp/bread-chisel-releases-,$(FULL_VER_ARCH))
+FULL_TEST_STAMPS     := $(addprefix .stamp/bread-test-26.04-,$(ARCHES))
+
+# Cross-compile chisel + spread + docker cli for one arch in a Canonical
+# ubuntu/go:1.25-26.04_edge builder container. Stamp content = hash of inputs
+# (version pins + builder image + script + patches + arch).
 BINARIES_ENV := CHISEL_REF="$(CHISEL_REF)" SPREAD_REF="$(SPREAD_REF)" GO_BUILDER_IMAGE="$(GO_BUILDER_IMAGE)" DOCKER_VERSION="$(DOCKER_VERSION)"
 
-.stamp/binaries: FORCE | .stamp
+$(FULL_BINARIES_STAMPS): .stamp/binaries-%: FORCE | .stamp
 	@set -e ; \
-		new=$$($(BINARIES_ENV) hack/hash_inputs.sh binaries) ; \
+		new=$$($(BINARIES_ENV) hack/hash_inputs.sh binaries-$*) ; \
 		cur=$$(cat $@ 2>/dev/null || true) ; \
 		if [ "$$new" != "$$cur" ]; then \
-			echo "==> building go binaries (chisel + spread + docker, both arches)" ; \
-			$(BINARIES_ENV) hack/build_binaries.sh ; \
+			echo "==> building go binaries for $* (chisel + spread + docker)" ; \
+			$(BINARIES_ENV) TARGET_ARCHES="$*" hack/build_binaries.sh ; \
 			echo "$$new" > $@ ; \
 		else \
-			echo "==> go binaries up-to-date (stamp matches)" ; \
+			echo "==> go binaries for $* up-to-date (stamp matches)" ; \
 		fi
 
-.stamp/bread-%: FORCE | .stamp
+$(FULL_BREAD_STAMPS): .stamp/bread-%: FORCE | .stamp
 	@hack/build_image.sh bread-$*
 
-.stamp/bread-chisel-releases-%: .stamp/bread-% .stamp/binaries FORCE | .stamp
+# The arch is the last dash-separated field of a <ver>-<arch> stem.
+arch_of = $(lastword $(subst -, ,$(1)))
+
+.SECONDEXPANSION:
+$(FULL_CHISEL_STAMPS): .stamp/bread-chisel-releases-%: .stamp/bread-% .stamp/binaries-$$(call arch_of,$$*) FORCE | .stamp
 	@hack/build_image.sh bread-chisel-releases-$*
 
-.stamp/bread-test-%: .stamp/bread-% .stamp/binaries FORCE | .stamp
+$(FULL_TEST_STAMPS): .stamp/bread-test-%: .stamp/bread-% .stamp/binaries-$$(call arch_of,$$*) FORCE | .stamp
 	@hack/build_image.sh bread-test-$*
 
 inlined/%.yaml: templates/%.yaml.in hack/inline_scripts.rb $(SCRIPTS)
