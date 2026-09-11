@@ -2,9 +2,7 @@
 
 FROM docker.io/library/ubuntu:22.04@sha256:829f6df217bcbae2b371026e81711d1a787c61b2967ad09d015063663ebafbf7
 
-# Build-time apt mirror override (ci passes APT_MIRROR); see hack/apt-mirror.sh.
-# Mirrors what the hosted runners do for themselves:
-# https://github.com/actions/runner-images/blob/main/images/ubuntu/scripts/build/configure-apt-sources.sh
+# Build-time apt mirror; see hack/apt-mirror.sh.
 ARG APT_MIRROR=
 
 # Skip man/doc/info install for every subsequent package -- dpkg's man-db

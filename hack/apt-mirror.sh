@@ -1,15 +1,15 @@
 #!/bin/sh -e
-# bread-apt-mirror: build-time apt mirror override that leaves the image's own
-# apt files alone. Into the scratch dir given as $1 it writes copies of the apt
-# sources with the archive uris pointed at a mirrorlist ($APT_MIRROR first,
-# archive.ubuntu.com second) and an apt.conf that makes apt read those copies;
-# the build exports APT_CONFIG=<dir>/apt.conf. Without APT_MIRROR the apt.conf
-# is empty and apt behaves as stock.
-#
-# The mirrorlist shape (mirror+file: with priorities, failover to the main
-# archive) follows what GitHub's hosted runners configure for themselves:
+# bread-apt-mirror: build-time apt mirror override for docker build, which
+# otherwise pulls from archive.ubuntu.com; on ci that is the slow path, while
+# the runner itself uses the azure mirror. Same mirror, same failover shape:
 # https://github.com/actions/runner-images/blob/main/images/ubuntu/scripts/build/configure-apt-sources.sh
-# Semantics: https://manpages.ubuntu.com/manpages/noble/en/man1/apt-transport-mirror.1.html
+# https://manpages.ubuntu.com/manpages/noble/en/man1/apt-transport-mirror.1.html
+#
+# Writes into the scratch dir $1 copies of the apt sources with the archive
+# uris pointed at a mirrorlist ($APT_MIRROR first, archive.ubuntu.com second)
+# plus an apt.conf that makes apt read those copies; the build exports
+# APT_CONFIG=<dir>/apt.conf. The image's own /etc/apt is never touched.
+# Without APT_MIRROR the apt.conf is empty and apt behaves as stock.
 #
 # Usage: bread-apt-mirror <scratch-dir>
 

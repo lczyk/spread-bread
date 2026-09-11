@@ -37,10 +37,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     # NOTE: 90 min covers the qemu lanes; native lanes finish well under 30.
     timeout-minutes: 90
-    # apt inside `docker build` defaults to archive.ubuntu.com; the runner
-    # itself uses the azure mirror with archive as fallback. Same mirror, same
-    # failover, applied for the build only (hack/apt-mirror.sh):
-    # https://github.com/actions/runner-images/blob/main/images/ubuntu/scripts/build/configure-apt-sources.sh
+    # Build-time apt mirror for docker build; see hack/apt-mirror.sh.
     env:
       APT_MIRROR: http://azure.archive.ubuntu.com/ubuntu/
 
