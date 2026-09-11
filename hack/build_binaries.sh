@@ -49,8 +49,12 @@ go version
 
 # Ensure git is available (the ubuntu/go image may not ship it).
 if ! command -v git >/dev/null; then
+    # Docker Desktop mounts the host bundle over this path read-only, which
+    # the ca-certificates postinst cannot replace.
+    pkgs="git"
+    [ -r /etc/ssl/certs/ca-certificates.crt ] || pkgs="$pkgs ca-certificates"
     apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git ca-certificates
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $pkgs
 fi
 
 # Build helper. extra_ldflags is appended to the standard "-s -w".

@@ -1,0 +1,7 @@
+#!/bin/bash -e
+# Stand-in for chisel-releases' tests/spread/lib/clean-rootfs, so the
+# restore-each hook in the inlined bread-chisel-releases yamls resolves
+# inside the contract suite.
+
+: "${ROOTFS_DIR:?ROOTFS_DIR is not set}"
+rm -rf -- "${ROOTFS_DIR:?}"/*

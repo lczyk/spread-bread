@@ -197,3 +197,5 @@ backends:
 suites:
   tests/spread/integration/:
     summary: Tests common scenarios
+
+kill-timeout: 1.5h

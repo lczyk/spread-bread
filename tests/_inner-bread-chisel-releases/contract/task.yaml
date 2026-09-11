@@ -23,19 +23,27 @@ execute: |
   fi
 
   # only the hacked chisel is shipped; `chisel` is a symlink to chisel-hacked,
-  # so `chisel --version` also reports the -hacked suffix (pinned v1.4.2).
-  chisel --version | grep -q "v1\.4\.2-hacked" || {
+  # so `chisel --version` also reports the -hacked suffix (pinned v1.5.0).
+  chisel --version | grep -q "v1\.5\.0-hacked" || {
       echo "chisel binary missing or wrong version"
       chisel --version || true
       exit 1
   }
 
   # chisel-hacked: same base version, -hacked suffix in version string.
-  chisel-hacked --version | grep -q "v1\.4\.2-hacked" || {
+  chisel-hacked --version | grep -q "v1\.5\.0-hacked" || {
       echo "chisel-hacked binary missing or wrong version"
       chisel-hacked --version || true
       exit 1
   }
+
+  # chisel-releases' install-slices refuses to run without ROOTFS_DIR; the
+  # 25.10 branch predates it. The restore-each hook that sweeps it is checked
+  # by spread itself, which fails the task when clean-rootfs does not resolve.
+  if [ "$expected_ver" != 25.10 ] && [ "${ROOTFS_DIR:-}" != /tmp/chisel-rootfs ]; then
+      echo "ROOTFS_DIR: expected=/tmp/chisel-rootfs got=${ROOTFS_DIR:-unset}"
+      exit 1
+  fi
 
   for cmd in curl wget git jq file sudo tree docker skopeo; do
       command -v "$cmd" >/dev/null || {
