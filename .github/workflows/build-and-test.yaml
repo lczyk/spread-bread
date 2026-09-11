@@ -22,7 +22,6 @@ jobs:
             arch: arm64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
-    # Build-time apt mirror for docker build; see hack/apt-mirror.sh.
     env:
       APT_MIRROR: http://azure.archive.ubuntu.com/ubuntu/
 

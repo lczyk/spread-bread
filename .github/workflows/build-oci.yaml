@@ -37,7 +37,6 @@ jobs:
     runs-on: ${{ matrix.runner }}
     # NOTE: 90 min covers the qemu lanes; native lanes finish well under 30.
     timeout-minutes: 90
-    # Build-time apt mirror for docker build; see hack/apt-mirror.sh.
     env:
       APT_MIRROR: http://azure.archive.ubuntu.com/ubuntu/
 

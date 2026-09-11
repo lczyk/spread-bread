@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Build one image if its input hash differs from the stamp.
 # Usage: build_image.sh <flavour-ver-arch>
-# Optional env: APT_MIRROR (see hack/apt-mirror.sh).
 #   flavour-ver-arch examples:
 #     bread-24.04-amd64
 #     bread-chisel-releases-25.10-arm64

@@ -2,7 +2,6 @@
 
 FROM docker.io/library/ubuntu:26.10@sha256:49077a16b772f8bc6e6f160ad2bfc218919f3455037387ed19a8309174328603
 
-# Build-time apt mirror; see hack/apt-mirror.sh.
 ARG APT_MIRROR=
 
 # Skip man/doc/info install for every subsequent package -- dpkg's man-db

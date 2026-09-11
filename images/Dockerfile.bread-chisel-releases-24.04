@@ -9,7 +9,6 @@ ARG BASE_TAG=24.04-amd64
 ARG BUILD_ARCH=amd64
 FROM bread:${BASE_TAG}
 ARG BUILD_ARCH
-# Build-time apt mirror; see hack/apt-mirror.sh.
 ARG APT_MIRROR=
 
 RUN --mount=type=bind,source=hack/apt-mirror.sh,target=/usr/local/bin/bread-apt-mirror \
