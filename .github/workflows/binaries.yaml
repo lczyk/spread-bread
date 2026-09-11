@@ -1,9 +1,10 @@
 name: Binaries
 
-# Reusable. Cross-compiles chisel + spread + the docker CLI (via
-# Canonical's ubuntu/go:1.25-26.04_edge builder) for all target
-# arches. Uploads cache/binaries/ + the matching
-# .stamp/binaries so downstream jobs can short-circuit any rebuild.
+# Reusable. One job per target arch cross-compiles chisel + spread + the
+# docker CLI (via Canonical's ubuntu/go:1.25-26.04_edge builder; pure go,
+# so every lane runs on amd64). Each uploads its cache/binaries/ + the
+# matching .stamp/binaries-<arch> as binaries-<arch> so downstream jobs
+# can short-circuit any rebuild.
 
 on:
   workflow_call:
@@ -13,6 +14,10 @@ permissions:
 
 jobs:
   build:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64, s390x, ppc64le]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
@@ -32,17 +37,17 @@ jobs:
         with:
           path: |
             cache/binaries/
-            .stamp/binaries
-          key: binaries-${{ hashFiles('hack/build_binaries.sh', 'patches/chisel/*.patch', 'makefile') }}
+            .stamp/binaries-${{ matrix.arch }}
+          key: binaries-${{ matrix.arch }}-${{ hashFiles('hack/build_binaries.sh', 'patches/chisel/*.patch', 'makefile') }}
 
-      - name: Build go binaries (chisel + spread + docker static)
+      - name: Build go binaries for ${{ matrix.arch }} (chisel + spread + docker static)
         if: steps.binaries-cache.outputs.cache-hit != 'true'
-        run: make .stamp/binaries
+        run: make binaries ARCH=${{ matrix.arch }}
 
-      - name: Upload cache/binaries + .stamp/binaries
+      - name: Upload cache/binaries + .stamp/binaries-${{ matrix.arch }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: binaries-cache
+          name: binaries-${{ matrix.arch }}
           path: |
             cache/binaries/
-            .stamp/binaries
+            .stamp/binaries-${{ matrix.arch }}
