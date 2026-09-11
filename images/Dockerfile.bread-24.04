@@ -9,7 +9,7 @@ RUN printf 'path-exclude /usr/share/man/*\npath-exclude /usr/share/doc/*\npath-e
         > /etc/dpkg/dpkg.cfg.d/01-nodoc && \
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openssh-server libarchive-tools && \
-    mkdir /var/run/sshd || true && \
+    mkdir -p /var/run/sshd && \
     echo 'root:bread' | chpasswd && \
     echo "PermitRootLogin yes" >> /etc/ssh/sshd_config && \
     echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config && \
