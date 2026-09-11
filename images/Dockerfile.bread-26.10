@@ -2,14 +2,19 @@
 
 FROM docker.io/library/ubuntu:26.10@sha256:49077a16b772f8bc6e6f160ad2bfc218919f3455037387ed19a8309174328603
 
+ARG APT_MIRROR=
+
 # Skip man/doc/info install for every subsequent package -- dpkg's man-db
 # trigger is a major cost under qemu emulation (s390x / ppc64le). Persists in
 # the image fs, so the bread-chisel-releases install inherits the exclusion.
-RUN printf 'path-exclude /usr/share/man/*\npath-exclude /usr/share/doc/*\npath-exclude /usr/share/info/*\n' \
+RUN --mount=type=bind,source=hack/apt-mirror.sh,target=/usr/local/bin/bread-apt-mirror \
+    --mount=type=tmpfs,target=/run/apt-mirror \
+    export APT_CONFIG=/run/apt-mirror/apt.conf && bread-apt-mirror /run/apt-mirror && \
+    printf 'path-exclude /usr/share/man/*\npath-exclude /usr/share/doc/*\npath-exclude /usr/share/info/*\n' \
         > /etc/dpkg/dpkg.cfg.d/01-nodoc && \
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openssh-server libarchive-tools && \
-    mkdir /var/run/sshd || true && \
+    mkdir -p /var/run/sshd && \
     echo 'root:bread' | chpasswd && \
     echo "PermitRootLogin yes" >> /etc/ssh/sshd_config && \
     echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config && \

@@ -30,6 +30,7 @@ case "$flavour" in
     bread)
         docker build \
             --tag "bread:$ver-$arch" \
+            --build-arg "APT_MIRROR=${APT_MIRROR:-}" \
             --file "images/Dockerfile.bread-$ver" \
             --platform "linux/$arch" \
             .
@@ -38,6 +39,7 @@ case "$flavour" in
         docker build \
             --tag "bread-chisel-releases:$ver-$arch" \
             --build-arg "BASE_TAG=$ver-$arch" \
+            --build-arg "APT_MIRROR=${APT_MIRROR:-}" \
             --build-arg "BUILD_ARCH=$arch" \
             --file "images/Dockerfile.bread-chisel-releases-$ver" \
             --platform "linux/$arch" \
