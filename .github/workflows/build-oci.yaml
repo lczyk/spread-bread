@@ -60,7 +60,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: images-out/
-          key: images-${{ matrix.arch }}-${{ hashFiles('images/Dockerfile.*', 'hack/bread-warning.sh', 'hack/banner.txt', 'hack/lazy-apt.sh', 'hack/apt-mirror.sh', 'hack/build_image.sh', format('.stamp/binaries-{0}', matrix.arch)) }}
+          key: images-${{ matrix.arch }}-${{ hashFiles('images/Dockerfile.*', 'hack/bread-warning.sh', 'hack/banner.txt', 'hack/tar-shim.sh', 'hack/lazy-apt.sh', 'hack/apt-mirror.sh', 'hack/build_image.sh', format('.stamp/binaries-{0}', matrix.arch)) }}
 
       - name: Set up qemu (emulated arches only)
         if: matrix.qemu && steps.images-cache.outputs.cache-hit != 'true'
