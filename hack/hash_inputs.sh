@@ -43,6 +43,7 @@ case "$flavour" in
             "hack/bread-warning.sh"
             "hack/banner.txt"
             "hack/tar-shim.sh"
+            "hack/seccomp-shim.c"
             "hack/apt-mirror.sh"
         )
         ;;

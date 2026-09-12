@@ -1,6 +1,6 @@
 # Bread image: Ubuntu 26.10 + sshd only.
 
-FROM docker.io/library/ubuntu:26.10@sha256:49077a16b772f8bc6e6f160ad2bfc218919f3455037387ed19a8309174328603
+FROM docker.io/library/ubuntu:26.10@sha256:49077a16b772f8bc6e6f160ad2bfc218919f3455037387ed19a8309174328603 AS base
 
 ARG APT_MIRROR=
 
@@ -45,5 +45,31 @@ RUN chmod 0755 /usr/local/bin/bread-tar-shim && \
     dpkg-divert --local --divert /usr/bin/tar.distrib --rename /usr/bin/tar && \
     ln -s /usr/local/bin/bread-tar-shim /usr/bin/tar
 
+# seccomp shim for sshd, inert unless the host's emulation refuses seccomp
+# filters. See hack/seccomp-shim.c. Cross-compiled on the build platform, from
+# the same pin as the base above (hack/check_base.sh moves both).
+FROM --platform=$BUILDPLATFORM docker.io/library/ubuntu:26.10@sha256:49077a16b772f8bc6e6f160ad2bfc218919f3455037387ed19a8309174328603 AS seccomp-shim
+ARG APT_MIRROR=
+RUN --mount=type=bind,source=hack/apt-mirror.sh,target=/usr/local/bin/bread-apt-mirror \
+    --mount=type=tmpfs,target=/run/apt-mirror \
+    export APT_CONFIG=/run/apt-mirror/apt.conf && bread-apt-mirror /run/apt-mirror && \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends clang lld
+ARG TARGETARCH
+RUN --mount=type=bind,source=hack/seccomp-shim.c,target=/src/seccomp-shim.c \
+    case "$TARGETARCH" in \
+        amd64)   triple=x86_64-linux-gnu ;; \
+        arm64)   triple=aarch64-linux-gnu ;; \
+        s390x)   triple=s390x-linux-gnu ;; \
+        ppc64le) triple=powerpc64le-linux-gnu ;; \
+        *) echo "no seccomp-shim target for $TARGETARCH" >&2; exit 1 ;; \
+    esac && \
+    clang --target="$triple" -O2 -Wall -fPIC -shared -nostdlib -fuse-ld=lld \
+        -o /seccomp-shim.so /src/seccomp-shim.c
+
+FROM base
+COPY --from=seccomp-shim /seccomp-shim.so /usr/local/lib/bread-seccomp-shim.so
+
 EXPOSE 22
-CMD ["/usr/sbin/sshd", "-D"]
+# -e: log to stderr, i.e. to `docker logs`; the container has no syslog.
+CMD ["env", "LD_PRELOAD=/usr/local/lib/bread-seccomp-shim.so", "/usr/sbin/sshd", "-D", "-e"]

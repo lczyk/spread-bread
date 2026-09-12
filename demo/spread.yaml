@@ -125,12 +125,39 @@ backends:
       fi
 
       if [ "$mode" = publish ]; then
+          host=127.0.0.1
           port=$(docker port "$container_name" 22 | head -n1 | cut -d: -f2)
           [ -n "$port" ] || { echo "could not find published sshd port for $container_name" >&2; exit 1; }
-          ADDRESS "127.0.0.1:$port"
+          address="$host:$port"
       else
-          ADDRESS "$(docker inspect "$container_name" --format '{{.NetworkSettings.Networks.bridge.IPAddress}}')"
+          host=$(docker inspect "$container_name" --format '{{.NetworkSettings.Networks.bridge.IPAddress}}')
+          port=22
+          address="$host"
       fi
+
+      # A running sshd can still fail every handshake (openssh's seccomp
+      # sandbox under emulation does; see hack/seccomp-shim.c). Say so here,
+      # with the container's logs, rather than leave spread to report a bare
+      # EOF.
+      if command -v ssh-keyscan >/dev/null 2>&1; then
+          handshake=""
+          for ((i = 0; i < 10; i++)); do
+              if ssh-keyscan -T 5 -t ed25519 -p "$port" "$host" 2>/dev/null | grep -q .; then
+                  handshake=1
+                  break
+              fi
+              sleep 1
+          done
+          if [ -z "$handshake" ]; then
+              docker logs "$container_name" >&2 2>&1 || true
+              # --rm only fires once the container stops, and a plain exit 1
+              # has spread retry the allocation for 5 minutes; FATAL does not.
+              docker rm -f "$container_name" >/dev/null 2>&1 || true
+              FATAL "sshd in $container_name is running but no ssh handshake completes"
+          fi
+      fi
+
+      ADDRESS "$address"
     discard: |
       #!/bin/bash
 

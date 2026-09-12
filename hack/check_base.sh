@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Detect upstream ubuntu base-image drift for the bread base Dockerfiles.
 #
-# Each images/Dockerfile.bread-<ver> pins its base by digest:
+# Each images/Dockerfile.bread-<ver> pins its base by digest in its first FROM:
 #   FROM <registry/repo>:<tag>@sha256:<manifest-list-digest>
 # This script resolves the *live* manifest-list digest for each base and
 # compares it to the pinned one. The pin is part of hack/hash_inputs.sh's
@@ -58,10 +58,9 @@ for df in "${dockerfiles[@]}"; do
     echo "$ver: drift ${pinned:-<unpinned>} -> $live"
 
     if [ "$mode" = "write" ]; then
-        # Exactly one base FROM per file; rewrite that line, keep the rest.
-        awk -v repl="FROM ${base}@${live}" \
-            '/^FROM / && !seen {print repl; seen=1; next} {print}' \
-            "$df" > "$df.tmp"
+        # Swap the ref inside every FROM that uses it: keeps stage names, and
+        # moves a build-platform stage pinned to the same base along with it.
+        sed "/^FROM /s|${from}|${base}@${live}|" "$df" > "$df.tmp"
         mv "$df.tmp" "$df"
     fi
 done

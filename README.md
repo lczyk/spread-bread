@@ -20,7 +20,7 @@ prebuilt docker images + ready-to-use spread yamls so you can drop Canonical [`s
 
 ## flavours
 
-two image flavours, each for ubuntu 22.04, 24.04, 25.10, 26.04, 26.10 x amd64 / arm64 / s390x / ppc64le, published as multiarch tags at `ghcr.io/lczyk/spread-bread/<flavour>:<ver>`. heads-up: s390x + ppc64le images build under qemu and ship untested (no native runners); amd64 + arm64 are tested on every release:
+two image flavours, each for ubuntu 22.04, 24.04, 25.10, 26.04, 26.10 x amd64 / arm64 / s390x / ppc64le, published as multiarch tags at `ghcr.io/lczyk/spread-bread/<flavour>:<ver>`. heads-up: s390x + ppc64le images build under qemu and ship with only a login check (no native runners); amd64 + arm64 are tested on every release:
 
 - **`bread`** -- base: ubuntu + sshd. general-purpose spread system; the test suite installs whatever else it needs.
 - **`bread-chisel-releases`** -- bread + `chisel` + the shell + container tooling typically needed by [chisel-releases](https://github.com/canonical/chisel-releases) spread tests (curl, wget, git, jq, file, sudo, tree, docker, skopeo). `chisel` and `docker` are built from source (canonical/chisel + docker/cli pinned by version tag) so the bundled binaries are go 1.25+ and survive qemu emulation.
@@ -61,6 +61,14 @@ ubuntu 26.04's patched GNU tar (`1.35+dfsg-4ubuntu0.x`) resolves extraction path
 
 the images work around it: `/bin/tar` is a shim that probes GNU tar once per container and, if it is broken, routes *extraction* to `bsdtar` (see `hack/tar-shim.sh`). creation stays on GNU tar, which spread needs for `--sort=name` when it packs artifacts. on unaffected hosts the shim is inert.
 
+### sshd under emulation (26.10)
+
+since openssh 10.4, sshd drops a connection before auth when it cannot install its pre-auth seccomp filter, and qemu-user (s390x, ppc64le) and Docker Desktop's Rosetta (amd64 on apple silicon) always refuse that filter. 26.10 ships openssh `10.5p1`, so under emulation every connection ends with `ssh_sandbox_child: prctl(PR_SET_SECCOMP): Invalid argument [preauth]` in sshd's log, and spread gives up with `ssh: handshake failed: EOF`.
+
+the 26.10 images work around it: sshd runs with a preloaded shim that reports success for that one refused call (see `hack/seccomp-shim.c`), so sshd carries on without the sandbox, as openssh did before 10.4. on real hardware the call succeeds and the shim is inert. it only reaches the image's own sshd: one a test starts itself, e.g. from a chisel rootfs under `chroot`, still fails under emulation.
+
+the allocate scripts also wait for a completed ssh handshake (when the host has `ssh-keyscan`) and fail with sshd's log if none comes, so a failure of this kind shows up at allocation rather than as a bare `EOF` from spread.
+
 ## install spread
 
 prefer a precompiled spread CLI over `go install`? same release ships statically-linked binaries for linux amd64 / arm64 / s390x / ppc64le:
@@ -100,6 +108,7 @@ spread-bread/
     check_base.sh                # detect upstream ubuntu base digest drift; rewrite @sha256 pins
     inline_scripts.rb            # splice scripts/*.sh into yaml templates
     tar-shim.sh                  # image /bin/tar; routes extraction to bsdtar where gnu tar is broken
+    seccomp-shim.c               # preloaded into 26.10's sshd; lets it log in where emulation refuses seccomp
     apt-mirror.sh                # build-time apt mirror override, bind-mounted into image builds by ci
   scripts/                       # allocate / discard scripts, one pair per flavour
   images/                        # one Dockerfile per (flavour, ubuntu version)
