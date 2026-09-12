@@ -7,7 +7,8 @@ name: Build OCI image tarballs
 # manifest or attach to releases without rebuilding.
 #
 # amd64 / arm64 build on native runners; s390x / ppc64le have no hosted
-# runners and build under qemu on amd64 (slow, publish-untested).
+# runners and build under qemu on amd64 (slow; published after only a login
+# check).
 #
 # bread-test is intentionally not built here (test-infra-only).
 
@@ -60,10 +61,11 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: images-out/
-          key: images-${{ matrix.arch }}-${{ hashFiles('images/Dockerfile.*', 'hack/bread-warning.sh', 'hack/banner.txt', 'hack/tar-shim.sh', 'hack/lazy-apt.sh', 'hack/apt-mirror.sh', 'hack/build_image.sh', format('.stamp/binaries-{0}', matrix.arch)) }}
+          key: images-${{ matrix.arch }}-${{ hashFiles('images/Dockerfile.*', 'hack/bread-warning.sh', 'hack/banner.txt', 'hack/tar-shim.sh', 'hack/seccomp-shim.c', 'hack/lazy-apt.sh', 'hack/apt-mirror.sh', 'hack/build_image.sh', format('.stamp/binaries-{0}', matrix.arch)) }}
 
+      # Needed on a cache hit too: the login check below runs the images.
       - name: Set up qemu (emulated arches only)
-        if: matrix.qemu && steps.images-cache.outputs.cache-hit != 'true'
+        if: matrix.qemu
         uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
 
       # Emulated builds are ~single-core and the per-version chains are
@@ -83,6 +85,41 @@ jobs:
               tag="$flavour:$ver-${{ matrix.arch }}"
               echo "==> saving $tag"
               docker save "$tag" -o "images-out/$flavour-$ver-${{ matrix.arch }}.tar"
+            done
+          done
+
+      # A cache hit skips the bake, so the daemon has nothing to run yet.
+      - name: Load cached ${{ matrix.arch }} images
+        if: matrix.qemu && steps.images-cache.outputs.cache-hit == 'true'
+        run: for f in images-out/*.tar; do docker load -i "$f"; done
+
+      # Emulated images get no test suite, so at least log into each one the
+      # way spread does. A running sshd is not enough; see hack/seccomp-shim.c.
+      - name: Log into every ${{ matrix.arch }} image
+        if: matrix.qemu
+        run: |
+          set -e
+          for flavour in bread bread-chisel-releases; do
+            for ver in 22.04 24.04 25.10 26.04 26.10; do
+              tag="$flavour:$ver-${{ matrix.arch }}"
+              echo "==> logging into $tag"
+              cid=$(docker run -d --platform "linux/${{ matrix.arch }}" -p 127.0.0.1::22 "$tag")
+              port=$(docker port "$cid" 22 | head -n1 | cut -d: -f2)
+              ok=""
+              for _ in $(seq 30); do
+                if sshpass -p bread ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                    -o LogLevel=ERROR -o ConnectTimeout=10 -p "$port" root@127.0.0.1 true; then
+                  ok=1
+                  break
+                fi
+                sleep 1
+              done
+              if [ -z "$ok" ]; then
+                echo "::error::cannot log into $tag"
+                docker logs "$cid" 2>&1 || true
+                exit 1
+              fi
+              docker rm -f "$cid" >/dev/null
             done
           done
 
