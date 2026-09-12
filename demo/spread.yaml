@@ -149,9 +149,11 @@ backends:
               sleep 1
           done
           if [ -z "$handshake" ]; then
-              echo "sshd in $container_name is running but no ssh handshake completes" >&2
               docker logs "$container_name" >&2 2>&1 || true
-              exit 1
+              # --rm only fires once the container stops, and a plain exit 1
+              # has spread retry the allocation for 5 minutes; FATAL does not.
+              docker rm -f "$container_name" >/dev/null 2>&1 || true
+              FATAL "sshd in $container_name is running but no ssh handshake completes"
           fi
       fi
 
