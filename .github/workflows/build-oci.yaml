@@ -99,12 +99,18 @@ jobs:
         if: matrix.qemu
         run: |
           set -e
+          fail() {
+            echo "::error::$1"
+            docker logs "$cid" 2>&1 || true
+            exit 1
+          }
           for flavour in bread bread-chisel-releases; do
             for ver in 22.04 24.04 25.10 26.04 26.10; do
               tag="$flavour:$ver-${{ matrix.arch }}"
               echo "==> logging into $tag"
               cid=$(docker run -d --platform "linux/${{ matrix.arch }}" -p 127.0.0.1::22 "$tag")
               port=$(docker port "$cid" 22 | head -n1 | cut -d: -f2)
+              [ -n "$port" ] || fail "$tag has no published sshd port"
               ok=""
               for _ in $(seq 30); do
                 if sshpass -p bread ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
@@ -114,11 +120,7 @@ jobs:
                 fi
                 sleep 1
               done
-              if [ -z "$ok" ]; then
-                echo "::error::cannot log into $tag"
-                docker logs "$cid" 2>&1 || true
-                exit 1
-              fi
+              [ -n "$ok" ] || fail "cannot log into $tag"
               docker rm -f "$cid" >/dev/null
             done
           done
