@@ -67,10 +67,11 @@ jobs:
         uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
 
       # Emulated builds are ~single-core and the per-version chains are
-      # independent, so run them in parallel. -O keeps each image's log whole.
+      # independent, so run them in parallel. Past 2 they only contend for
+      # the runner's cores. -O keeps each image's log whole.
       - name: Bake bread + bread-chisel-releases images for ${{ matrix.arch }}
         if: steps.images-cache.outputs.cache-hit != 'true'
-        run: make -j"$(nproc)" -O build-bread build-bread-chisel-releases ARCH=${{ matrix.arch }}
+        run: make -j2 -O build-bread build-bread-chisel-releases ARCH=${{ matrix.arch }}
 
       - name: Save images as docker-archive tarballs
         if: steps.images-cache.outputs.cache-hit != 'true'
