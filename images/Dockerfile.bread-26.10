@@ -1,6 +1,6 @@
 # Bread image: Ubuntu 26.10 + sshd only.
 
-FROM docker.io/library/ubuntu:26.10@sha256:49077a16b772f8bc6e6f160ad2bfc218919f3455037387ed19a8309174328603 AS base
+FROM docker.io/library/ubuntu:26.10@sha256:ee126c2fa0249079a7e24ae3a3d29b04783ef93ab33c868751c9a1289d3fffff AS base
 
 ARG APT_MIRROR=
 
@@ -48,7 +48,7 @@ RUN chmod 0755 /usr/local/bin/bread-tar-shim && \
 # seccomp shim for sshd, inert unless the host's emulation refuses seccomp
 # filters. See hack/seccomp-shim.c. Cross-compiled on the build platform, from
 # the same pin as the base above (hack/check_base.sh moves both).
-FROM --platform=$BUILDPLATFORM docker.io/library/ubuntu:26.10@sha256:49077a16b772f8bc6e6f160ad2bfc218919f3455037387ed19a8309174328603 AS seccomp-shim
+FROM --platform=$BUILDPLATFORM docker.io/library/ubuntu:26.10@sha256:ee126c2fa0249079a7e24ae3a3d29b04783ef93ab33c868751c9a1289d3fffff AS seccomp-shim
 ARG APT_MIRROR=
 RUN --mount=type=bind,source=hack/apt-mirror.sh,target=/usr/local/bin/bread-apt-mirror \
     --mount=type=tmpfs,target=/run/apt-mirror \
