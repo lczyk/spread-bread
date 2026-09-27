@@ -157,8 +157,9 @@ jobs:
 
             **precompiled chisel-hacked binaries** -- chisel v1.5.0 with
             CHISEL_HACKS patches applied. when `CHISEL_HACKS=1` is set,
-            skips release maintenance checks and release validation -- used
-            by chisel-releases tests against in-development releases.
+            skips release maintenance checks and validates releases with a
+            faster path conflict check -- used by chisel-releases tests
+            against in-development releases.
             ships with `.sha256` and `.cosign.bundle` sidecars.
 
             ```

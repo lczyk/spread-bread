@@ -1,0 +1,571 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: spread-bread <lczyk@spread-bread>
+Date: Sun, 27 Sep 2026 12:00:00 +0100
+Subject: [PATCH] perf: trie path conflict check via CHISEL_HACKS
+
+backport of canonical/chisel#302 onto v1.5.0: a trie-based path conflict
+check in place of the quadratic glob / generate loop in Release.validate.
+gated on CHISEL_HACKS=1; unset keeps upstream's loop.
+---
+ internal/setup/conflict.go      |  254 +++++++++++++++++++++++++++++++++++++++
+ internal/setup/conflict_test.go |  206 ++++++++++++++++++++++++++++++++
+ internal/setup/export_test.go   |    8 +
+ internal/setup/setup.go         |   52 +++++---
+ 4 files changed, 498 insertions(+), 22 deletions(-)
+ create mode 100644 internal/setup/conflict.go
+ create mode 100644 internal/setup/conflict_test.go
+
+diff --git a/internal/setup/conflict.go b/internal/setup/conflict.go
+new file mode 100644
+index 0000000..4fceaeb
+--- /dev/null
++++ b/internal/setup/conflict.go
+@@ -0,0 +1,254 @@
++package setup
++
++import (
++	"errors"
++	"fmt"
++	"maps"
++	"slices"
++	"strings"
++
++	"github.com/canonical/chisel/internal/strdist"
++)
++
++type segmentSlice struct {
++	Slice *Slice
++	// PathInfo is kept here as an optimization to avoid lookups on
++	// Slice.Contents for every slice.
++	PathInfo PathInfo
++	// WholePath is used to simplify both error reporting and matching against
++	// paths with "**"; both of which require reconstructing the whole path.
++	WholePath string
++}
++
++type segment struct {
++	Text string
++	// HasGlob is set when the path contains "*" or "?" or "**".
++	HasGlob bool
++	// HasDoubleGlob is set when the path contains "**".
++	HasDoubleGlob bool
++}
++
++type node struct {
++	Segment       segment
++	SegmentSlices []*segmentSlice
++	Children      map[string]*node
++}
++
++// pathConflictTree uses a custom trie to find conflicts that might arise from
++// extracting different paths into the same root directory.
++//
++// It optimizes finding conflicts by calling strdist.GlobPath only when
++// strictly necessary and by passing it less data to compare. It relies on the
++// fact that in real chisel releases most paths often share a very long prefix
++// that does not need to be compared each time. Additionally, our grammar is
++// very restrictive (only "*", "?" and "**") meaning that unless "**" is used,
++// any symbol can only match until a "/" is found.
++//
++// Because of the above, this algorithm splits paths into segments that are
++// delimited by "/". When inserting a path, each segment is compared at most
++// once with the path independently of how many paths there are in the release.
++// Lastly, when looking for conflicts, if the segments do not contain "**" then
++// instead of comparing the whole path we can compare only the segment.
++type pathConflictTree struct {
++	Root         *node
++	PathToSlices map[string][]*Slice
++}
++
++var rootSegment = segment{"/", false, false}
++
++func newConflictTree(pathToSlices map[string][]*Slice) pathConflictTree {
++	root := &node{
++		Segment:  rootSegment,
++		Children: map[string]*node{},
++	}
++	return pathConflictTree{Root: root, PathToSlices: pathToSlices}
++}
++
++func (g *pathConflictTree) HasConflict() error {
++	// Make errors deterministic.
++	paths := slices.Collect(maps.Keys(g.PathToSlices))
++	slices.Sort(paths)
++
++	for _, path := range paths {
++		slices := g.PathToSlices[path]
++		var segmentSlices []*segmentSlice
++		for _, slice := range slices {
++			segmentSlices = append(segmentSlices, &segmentSlice{slice, slice.Contents[path], path})
++		}
++		segments, err := pathToSegments(path)
++		if err != nil {
++			return err
++		}
++		err = g.pathHasConflict(segments, segmentSlices)
++		if err != nil {
++			return err
++		}
++		g.insertSegments(segments, segmentSlices)
++	}
++	return nil
++}
++
++func (g *pathConflictTree) pathHasConflict(newSegments []segment, newSegmentSlices []*segmentSlice) error {
++	conflictErrMsg := func(oldSegmentSlice, newSegmentSlice *segmentSlice) error {
++		oldSlice, oldPath := oldSegmentSlice.Slice, oldSegmentSlice.WholePath
++		newSlice, newPath := newSegmentSlice.Slice, newSegmentSlice.WholePath
++		if (oldSlice.Package > newSlice.Package) || (oldSlice.Package == newSlice.Package && oldSlice.Name > newSlice.Name) ||
++			(oldSlice.Package == newSlice.Package && oldSlice.Name == newSlice.Name && oldPath > newPath) {
++			oldSlice, newSlice = newSlice, oldSlice
++			oldPath, newPath = newPath, oldPath
++		}
++		return fmt.Errorf("slices %s and %s conflict on %s and %s", oldSlice, newSlice, oldPath, newPath)
++	}
++
++	var currentQueue []*node
++	var nextQueue []*node
++
++	// Skip "/".
++	currentQueue = slices.Collect(maps.Values(g.Root.Children))
++	newSegments = newSegments[1:]
++
++	// If we run out of segments from the graph or the path there cannot be a
++	// conflict.
++	for len(currentQueue) > 0 && len(newSegments) > 0 {
++		newSegment := newSegments[0]
++		for _, oldNode := range currentQueue {
++		oldNodeLoop:
++			for _, newSegmentSlice := range newSegmentSlices {
++				newSlice := newSegmentSlice.Slice
++				newPathInfo := newSegmentSlice.PathInfo
++				for _, oldSegmentSlice := range oldNode.SegmentSlices {
++					oldSlice := oldSegmentSlice.Slice
++					oldPathInfo := oldSegmentSlice.PathInfo
++					oldSegment := oldNode.Segment
++
++					// If slices cannot conflict then skip the more expensive
++					// checks.
++					if (newPathInfo.Kind == GlobPath || newPathInfo.Kind == CopyPath) && (oldPathInfo.Kind == GlobPath || oldPathInfo.Kind == CopyPath) {
++						if oldSlice.Package == newSlice.Package {
++							// If content is **extracted** from the same
++							// package, it will necessarily be the same.
++							continue
++						}
++					}
++
++					if oldSegment.HasDoubleGlob || newSegment.HasDoubleGlob {
++						// Case 1: Either segment has a double glob, we need to
++						// check the whole remaining path against each other.
++						if strdist.GlobPath(newSegmentSlice.WholePath, oldSegmentSlice.WholePath) {
++							return conflictErrMsg(oldSegmentSlice, newSegmentSlice)
++						}
++					} else {
++						var matched bool
++						if oldSegment.HasGlob || newSegment.HasGlob {
++							// Case 2: Either segment has a single glob (* or ?).
++							// We only need to check the segment.
++							matched = strdist.GlobPath(newSegment.Text, oldSegment.Text)
++						} else {
++							// Case 3: No globs, we can compare the segments directly.
++							matched = newSegment.Text == oldSegment.Text
++						}
++						if matched {
++							if len(oldNode.Children) == 0 && len(newSegments) == 1 {
++								// If we are at the terminal node of both paths we found a conflict.
++								return conflictErrMsg(oldSegmentSlice, newSegmentSlice)
++							}
++							for _, child := range oldNode.Children {
++								nextQueue = append(nextQueue, child)
++							}
++							break oldNodeLoop
++						} else {
++							// Once GlobPath returns false there cannot be a
++							// conflict between both paths, we can break here.
++							break oldNodeLoop
++						}
++					}
++				}
++			}
++		}
++		currentQueue, nextQueue = nextQueue, currentQueue
++		nextQueue = nextQueue[0:0]
++
++		newSegments = newSegments[1:]
++	}
++
++	return nil
++}
++
++// insertSegments inserts the path's segments blindly in the graph without
++// looking at conflicts.
++func (g *pathConflictTree) insertSegments(segments []segment, segmentSlices []*segmentSlice) {
++	parent := g.Root
++	// Skip "/".
++	segments = segments[1:]
++
++	for _, segment := range segments {
++		current, ok := parent.Children[segment.Text]
++		if !ok {
++			current = &node{
++				Segment:  segment,
++				Children: map[string]*node{},
++			}
++		}
++		current.SegmentSlices = append(current.SegmentSlices, segmentSlices...)
++		parent.Children[segment.Text] = current
++		parent = current
++	}
++}
++
++// pathToSegments returns the list of segments that compose the path.
++// Directories, i.e. paths that end with "/", contain the empty segment "" for
++// explicit termination in the trie to distinguish them from parent directories
++// of other paths.
++func pathToSegments(path string) ([]segment, error) {
++	if path[0] != '/' {
++		return nil, errors.New("internal error: path does not start with '/'")
++	}
++	segments := []segment{rootSegment}
++	path = path[1:]
++	for {
++		end, singleGlob, doubleGlob := segmentEnd(path)
++		segment := segment{
++			Text:          path[:end],
++			HasGlob:       singleGlob,
++			HasDoubleGlob: doubleGlob,
++		}
++		segments = append(segments, segment)
++		path = path[end:]
++		if path == "" && !strings.HasSuffix(segment.Text, "/") {
++			// Non-directories: last segment is also termination node.
++			break
++		}
++		if segment.Text == "" {
++			// Directories: add the termination node.
++			break
++		}
++	}
++	return segments, nil
++}
++
++// segmentEnd finds the end of a segment according to the following rules:
++//   - If s contains "/" then segment will finish at the first "/" found unless
++//     there is a "**" before that, in that case segment = s.
++//   - Else segment = s.
++func segmentEnd(s string) (end int, hasGlob bool, hasDoubleGlob bool) {
++	end = strings.IndexAny(s, "*?/")
++	if end == -1 {
++		end = len(s)
++	} else if s[end] == '*' || s[end] == '?' {
++		hasGlob = true
++		slash := strings.IndexRune(s[end:], '/')
++		if slash == -1 {
++			end = len(s)
++		} else {
++			end = end + slash + 1
++		}
++		hasDoubleGlob = strings.Contains(s[:end], "**")
++		if hasDoubleGlob {
++			end = len(s)
++		}
++	} else {
++		// Case where s[end] == "/":
++		end++
++	}
++	return end, hasGlob, hasDoubleGlob
++}
+diff --git a/internal/setup/conflict_test.go b/internal/setup/conflict_test.go
+new file mode 100644
+index 0000000..64292aa
+--- /dev/null
++++ b/internal/setup/conflict_test.go
+@@ -0,0 +1,206 @@
++package setup_test
++
++import (
++	"slices"
++	"strings"
++
++	. "gopkg.in/check.v1"
++
++	"github.com/canonical/chisel/internal/setup"
++)
++
++func (s *S) TestPathToSegments(c *C) {
++	tests := []struct {
++		path     string
++		segments []setup.PathSegment
++		err      string
++	}{{
++		path: "/foo/bar",
++		segments: []setup.PathSegment{
++			{Text: "/"},
++			{Text: "foo/"},
++			{Text: "bar"},
++		},
++	}, {
++		path: "/foo/",
++		segments: []setup.PathSegment{
++			{Text: "/"},
++			{Text: "foo/"},
++			{Text: ""},
++		},
++	}, {
++		path: "/",
++		segments: []setup.PathSegment{
++			{Text: "/"},
++			{Text: ""},
++		},
++	}, {
++		path: "/*",
++		segments: []setup.PathSegment{
++			{Text: "/"},
++			{Text: "*", HasGlob: true},
++		},
++	}, {
++		path: "/*/",
++		segments: []setup.PathSegment{
++			{Text: "/"},
++			{Text: "*/", HasGlob: true},
++			{Text: ""},
++		},
++	}, {
++		path: "/**",
++		segments: []setup.PathSegment{
++			{Text: "/"},
++			{Text: "**", HasGlob: true, HasDoubleGlob: true},
++		},
++	}, {
++		path: "/**/bar",
++		segments: []setup.PathSegment{
++			{Text: "/"},
++			{Text: "**/bar", HasGlob: true, HasDoubleGlob: true},
++		},
++	}, {
++		path: "/foo*/bar",
++		segments: []setup.PathSegment{
++			{Text: "/"},
++			{Text: "foo*/", HasGlob: true},
++			{Text: "bar"},
++		},
++	}, {
++		path: "/foo?/bar",
++		segments: []setup.PathSegment{
++			{Text: "/"},
++			{Text: "foo?/", HasGlob: true},
++			{Text: "bar"},
++		},
++	}, {
++		path: "/fo??/bar",
++		segments: []setup.PathSegment{
++			{Text: "/"},
++			{Text: "fo??/", HasGlob: true},
++			{Text: "bar"},
++		},
++	}, {
++		path: "/f*o?/bar",
++		segments: []setup.PathSegment{
++			{Text: "/"},
++			{Text: "f*o?/", HasGlob: true},
++			{Text: "bar"},
++		},
++	}, {
++		path: "/f*oo/f**/bar",
++		segments: []setup.PathSegment{
++			{Text: "/"},
++			{Text: "f*oo/", HasGlob: true},
++			{Text: "f**/bar", HasGlob: true, HasDoubleGlob: true},
++		},
++	}, {
++		path: "/foo**/bar/baz",
++		segments: []setup.PathSegment{
++			{Text: "/"},
++			{Text: "foo**/bar/baz", HasGlob: true, HasDoubleGlob: true},
++		},
++	}, {
++		path: "/foo/**/sub/**/bar",
++		segments: []setup.PathSegment{
++			{Text: "/"},
++			{Text: "foo/"},
++			{Text: "**/sub/**/bar", HasGlob: true, HasDoubleGlob: true},
++		},
++	}, {
++		path: "foo/bar",
++		err:  `internal error: path does not start with '/'`,
++	}}
++
++	for _, test := range tests {
++		c.Logf("Test: %q", test.path)
++		segments, err := setup.PathToSegments(test.path)
++		if test.err != "" {
++			c.Assert(err, ErrorMatches, test.err)
++			continue
++		}
++		c.Assert(err, IsNil)
++		c.Assert(segments, DeepEquals, test.segments)
++	}
++}
++
++func (s *S) TestConflictTree(c *C) {
++	sliceOne := &setup.Slice{
++		Package: "pkg1",
++		Name:    "path",
++		Contents: map[string]setup.PathInfo{
++			"/a/*/b": {Kind: setup.GlobPath},
++		},
++	}
++	sliceTwo := &setup.Slice{
++		Package: "pkg2",
++		Name:    "glob",
++		Contents: map[string]setup.PathInfo{
++			"/a/*": {Kind: setup.GlobPath},
++		},
++	}
++
++	pathOne := setup.PathSegmentSlice{
++		Slice:     sliceOne,
++		PathInfo:  setup.PathInfo{Kind: setup.GlobPath},
++		WholePath: "/a/*/b",
++	}
++	pathTwo := setup.PathSegmentSlice{
++		Slice:     sliceTwo,
++		PathInfo:  setup.PathInfo{Kind: setup.GlobPath},
++		WholePath: "/a/*",
++	}
++
++	tree := setup.NewConflictTree(map[string][]*setup.Slice{
++		"/a/*/b": {sliceOne},
++		"/a/*":   {sliceTwo},
++	})
++	err := tree.HasConflict()
++	c.Assert(err, IsNil)
++
++	expected := &setup.PathNode{
++		Segment: setup.PathSegment{Text: "/"},
++		Children: map[string]*setup.PathNode{
++			"a/": {
++				Segment:       setup.PathSegment{Text: "a/"},
++				SegmentSlices: []*setup.PathSegmentSlice{&pathOne, &pathTwo},
++				Children: map[string]*setup.PathNode{
++					"*": {
++						Segment:       setup.PathSegment{Text: "*", HasGlob: true},
++						SegmentSlices: []*setup.PathSegmentSlice{&pathTwo},
++					},
++					"*/": {
++						Segment:       setup.PathSegment{Text: "*/", HasGlob: true},
++						SegmentSlices: []*setup.PathSegmentSlice{&pathOne},
++						Children: map[string]*setup.PathNode{
++							"b": {
++								Segment:       setup.PathSegment{Text: "b"},
++								SegmentSlices: []*setup.PathSegmentSlice{&pathOne},
++							},
++						},
++					},
++				},
++			},
++		},
++	}
++	assertTreeEquals(c, tree.Root, expected)
++}
++
++func assertTreeEquals(c *C, obtained, expected *setup.PathNode) {
++	c.Assert(obtained.Segment, DeepEquals, expected.Segment)
++
++	slices.SortFunc(obtained.SegmentSlices, func(a, b *setup.PathSegmentSlice) int {
++		return strings.Compare(a.Slice.String(), b.Slice.String())
++	})
++	slices.SortFunc(expected.SegmentSlices, func(a, b *setup.PathSegmentSlice) int {
++		return strings.Compare(a.Slice.String(), b.Slice.String())
++	})
++	c.Assert(obtained.SegmentSlices, DeepEquals, expected.SegmentSlices)
++
++	c.Assert(len(obtained.Children), Equals, len(expected.Children))
++	for name, expectedChild := range expected.Children {
++		obtainedChild, ok := obtained.Children[name]
++		c.Assert(ok, Equals, true)
++		assertTreeEquals(c, obtainedChild, expectedChild)
++	}
++}
+diff --git a/internal/setup/export_test.go b/internal/setup/export_test.go
+index 35231e5..7fd2d93 100644
+--- a/internal/setup/export_test.go
++++ b/internal/setup/export_test.go
+@@ -1,3 +1,11 @@
+ package setup
+
+ type YAMLPath = yamlPath
++
++type PathSegment = segment
++type PathSegmentSlice = segmentSlice
++type PathNode = node
++type PathConflictTree = pathConflictTree
++
++var PathToSegments func(string) ([]PathSegment, error) = pathToSegments
++var NewConflictTree func(map[string][]*Slice) PathConflictTree = newConflictTree
+diff --git a/internal/setup/setup.go b/internal/setup/setup.go
+index 9d7e4a7..c7d89b5 100644
+--- a/internal/setup/setup.go
++++ b/internal/setup/setup.go
+@@ -285,31 +285,39 @@ func (r *Release) validate() error {
+ 	}
+
+ 	// Check for glob and generate conflicts.
+-	for oldPath, oldSlices := range paths {
+-		for _, old := range oldSlices {
+-			oldInfo := old.Contents[oldPath]
+-			if oldInfo.Kind != GeneratePath && oldInfo.Kind != GlobPath {
+-				break
+-			}
+-			for newPath, newSlices := range paths {
+-				if oldPath == newPath {
+-					// Identical paths have been filtered earlier.
+-					continue
++	if os.Getenv("CHISEL_HACKS") == "1" {
++		tree := newConflictTree(paths)
++		err = tree.HasConflict()
++		if err != nil {
++			return err
++		}
++	} else {
++		for oldPath, oldSlices := range paths {
++			for _, old := range oldSlices {
++				oldInfo := old.Contents[oldPath]
++				if oldInfo.Kind != GeneratePath && oldInfo.Kind != GlobPath {
++					break
+ 				}
+-				for _, new := range newSlices {
+-					newInfo := new.Contents[newPath]
+-					if oldInfo.Kind == GlobPath && (newInfo.Kind == GlobPath || newInfo.Kind == CopyPath) {
+-						if new.Package == old.Package {
+-							continue
+-						}
++				for newPath, newSlices := range paths {
++					if oldPath == newPath {
++						// Identical paths have been filtered earlier.
++						continue
+ 					}
+-					if strdist.GlobPath(newPath, oldPath) {
+-						if (old.Package > new.Package) || (old.Package == new.Package && old.Name > new.Name) ||
+-							(old.Package == new.Package && old.Name == new.Name && oldPath > newPath) {
+-							old, new = new, old
+-							oldPath, newPath = newPath, oldPath
++					for _, new := range newSlices {
++						newInfo := new.Contents[newPath]
++						if oldInfo.Kind == GlobPath && (newInfo.Kind == GlobPath || newInfo.Kind == CopyPath) {
++							if new.Package == old.Package {
++								continue
++							}
++						}
++						if strdist.GlobPath(newPath, oldPath) {
++							if (old.Package > new.Package) || (old.Package == new.Package && old.Name > new.Name) ||
++								(old.Package == new.Package && old.Name == new.Name && oldPath > newPath) {
++								old, new = new, old
++								oldPath, newPath = newPath, oldPath
++							}
++							return fmt.Errorf("slices %s and %s conflict on %s and %s", old, new, oldPath, newPath)
+ 						}
+-						return fmt.Errorf("slices %s and %s conflict on %s and %s", old, new, oldPath, newPath)
+ 					}
+ 				}
+ 			}
