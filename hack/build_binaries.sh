@@ -94,12 +94,7 @@ build chisel https://github.com/canonical/chisel  "$CHISEL_REF" ./cmd/chisel \
 # the hacked variant. Version string gets a -hacked suffix so `chisel-hacked
 # --version` is distinguishable from the unpatched binary.
 cd /src/chisel
-patches=(
-    /patches/chisel/0001-*.patch
-    /patches/chisel/0002-*.patch
-    /patches/chisel/0003-*.patch
-)
-for p in "${patches[@]}"; do
+for p in /patches/chisel/*.patch; do
     echo "==> applying patch: $(basename "$p")"
     git apply "$p"
 done
