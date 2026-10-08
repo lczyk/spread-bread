@@ -3,22 +3,13 @@
 
 DOCKER ?= docker
 
-# Cross-compiled go binaries baked into bread-chisel-releases + bread-test.
-# Pinned to specific upstream commits for reproducibility.
-CHISEL_REF := v1.5.1
-SPREAD_REF := 2026.07.12
-GO_BUILDER_IMAGE := ubuntu/go:1.25-26.04_edge
-# Docker CLI built from docker/cli source at tag v$(DOCKER_VERSION); ubuntu
-# apt's docker.io is built with go 1.24 and crashes under qemu emulation, and
-# docker.com's static tarballs don't cover s390x / ppc64le.
-DOCKER_VERSION := 29.8.0
-
-# Full matrix.
-VERSIONS := 22.04 24.04 25.10 26.04 26.10
-ARCHES   := amd64 arm64 s390x ppc64le
-# Arches with native runners (local dev + ci). s390x / ppc64le images build
-# under qemu and publish untested; tests + demo stay on the native pair.
-NATIVE_ARCHES := amd64 arm64
+# Pins (CHISEL_REF, SPREAD_REF, GO_BUILDER_IMAGE, DOCKER_VERSION) and the
+# matrix (VERSIONS, ARCHES, NATIVE_ARCHES) live in config.yaml. make re-reads
+# this generated include whenever config.yaml changes.
+include .stamp/config.mk
+.stamp/config.mk: config.yaml hack/build_config.rb
+	@mkdir -p .stamp
+	@hack/build_config.rb --make > $@.tmp && mv $@.tmp $@
 
 # Optional narrowing via env vars, e.g.:
 #   make build-bread VER=24.04
@@ -52,7 +43,7 @@ SCRIPTS := $(wildcard scripts/*.sh)
 
 .PHONY: help
 help:  ## Show this help
-	@grep -E '^[a-zA-Z_./-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
+	@grep -hE '^[a-zA-Z_./-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-40s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: all

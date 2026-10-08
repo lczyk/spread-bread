@@ -69,7 +69,7 @@ end
 
 # Pathspecs rather than files, so `git diff` also sees deletions.
 def release
-  ["images/", "templates/", "scripts/", "patches/", "makefile", "hack/inline_scripts.rb",
+  ["images/", "templates/", "scripts/", "patches/", "config.yaml", "hack/inline_scripts.rb",
    BINARIES_SCRIPT, *BREAD_FILES, *CHISEL_FILES, *IMAGE_BUILD_SCRIPTS].uniq
 end
 

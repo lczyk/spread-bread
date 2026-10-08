@@ -1,17 +1,25 @@
-# What the build scripts share. Pins and the version matrix are read from the
-# makefile so there is one copy.
+#!/usr/bin/env ruby
+# Pins and the build matrix from config.yaml, for the other hack scripts.
+# Run as `build_config.rb --make` it prints them as make assignments, which
+# the makefile includes.
+
+require "yaml"
 
 module BuildConfig
-  MAKEFILE = File.read(File.expand_path("../makefile", __dir__))
-
-  def self.from_makefile(name)
-    MAKEFILE[/^#{name} := (.*)$/, 1] or abort "build_config: #{name} not in makefile"
-  end
+  CONFIG = YAML.safe_load_file(File.expand_path("../config.yaml", __dir__))
 
   # make passes the pins to the build in the environment, so a command-line
   # override (make CHISEL_REF=...) has to win here too.
-  def self.pin(name) = ENV.fetch(name) { from_makefile(name) }
+  def self.pin(name) = ENV.fetch(name) { CONFIG.fetch("pins").fetch(name) }
 
-  VERSIONS = from_makefile("VERSIONS").split.freeze
-  PUBLISHED_FLAVOURS = %w[bread bread-chisel-releases].freeze
+  VERSIONS = CONFIG.fetch("versions").freeze
+  PUBLISHED_FLAVOURS = CONFIG.fetch("flavours").freeze
+end
+
+if $PROGRAM_NAME == __FILE__
+  abort "usage: build_config.rb --make" unless ARGV == ["--make"]
+  BuildConfig::CONFIG.fetch("pins").each { |name, value| puts "#{name} := #{value}" }
+  %w[versions arches native_arches].each do |key|
+    puts "#{key.upcase} := #{BuildConfig::CONFIG.fetch(key).join(" ")}"
+  end
 end
