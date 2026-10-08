@@ -10,8 +10,8 @@ name: Base refresh
 # already hashes, so merging the PR busts the bread stamp and forces a real
 # rebuild on the next build (bread-chisel-releases + bread-test cascade).
 #
-# Publishing stays a maintainer step: after merge, push an r<N> tag to fire
-# release.yaml.
+# Merging the PR publishes: bump-revision.yaml commits the REVISION bump,
+# which fires release.yaml.
 #
 # Pushes + PRs use the lczyk-bot PAT (secrets.BOT_PAT), not the default
 # GITHUB_TOKEN -- a real account's token, so the bump PR DOES trigger ci.yaml
@@ -69,8 +69,7 @@ jobs:
             echo
             echo "$drift"
             echo
-            echo "merge to land the new pins, then push an \`r<N>\` tag"
-            echo "to publish."
+            echo "merging lands the new pins and cuts a release."
           } > /tmp/pr-body.md
 
           # NOTE: `gh pr view <branch>` is wrong here twice over: it also

@@ -1,13 +1,17 @@
 name: CI
 run-name: CI for ${{ github.ref }}
 
-# Build + test on PR and on push to main. No publishing.
+# Build + test on PR and on push to main (except REVISION bumps). No
+# publishing.
 
 on:
   pull_request:
   push:
     branches:
       - main
+    # Revision bumps go through release.yaml, which builds + tests them.
+    paths-ignore:
+      - REVISION
   workflow_dispatch:
 
 # Cancel in-flight runs on the same ref when a newer one starts.
@@ -56,12 +60,31 @@ jobs:
             exit 1
           fi
 
+  # REVISION is bumped by bump-revision.yaml after merge, never by a PR.
+  # Passes outside pull_request so ci-ok stays green on main.
+  check-revision:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    steps:
+      - name: Assert the PR leaves REVISION alone
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_FILES: repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files
+        run: |
+          if gh api --paginate "$PR_FILES" --jq '.[].filename' | grep -qx REVISION; then
+            echo "::error::PRs must not edit REVISION -- it is bumped after merge"
+            exit 1
+          fi
+
   # The one check the main ruleset requires, so it doesn't have to list every
   # matrix job by name. always() makes a failed or cancelled dependency fail
   # this job; a skipped required check would count as passing.
   ci-ok:
     if: always()
-    needs: [binaries, build-and-test, build-oci, check-inlined]
+    needs: [binaries, build-and-test, build-oci, check-inlined, check-revision]
     runs-on: ubuntu-24.04
     steps:
       - name: Assert every job succeeded

@@ -1,0 +1,81 @@
+name: Bump revision
+
+# After a PR merges into main, commit "release: r<N+1>" (a REVISION bump) on
+# top of main; that push fires release.yaml. Direct pushes to main never run
+# this, so commits made straight on main don't release until REVISION is
+# bumped by hand.
+#
+# pull_request_target (not pull_request) so BOT_PAT is available; nothing
+# from the PR is checked out or run. The commit goes through GraphQL
+# createCommitOnBranch, which GitHub signs (the main ruleset requires signed
+# commits), as the bot so its push triggers release.yaml (GITHUB_TOKEN pushes
+# don't). The bot needs a ruleset bypass for the required ci-ok check.
+
+on:
+  pull_request_target:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Compute the next revision without committing it
+        type: boolean
+        default: true
+
+# Queue, don't cancel: each run re-reads main's head, so a later run sees the
+# earlier run's bump.
+concurrency:
+  group: bump-revision
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  bump:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Commit REVISION bump on main
+        env:
+          GH_TOKEN: ${{ secrets.BOT_PAT }}
+          REPO: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
+        run: |
+          set -euo pipefail
+
+          head=$(gh api "repos/$REPO/commits/main" --jq .sha)
+          subject=$(gh api "repos/$REPO/commits/$head" --jq '.commit.message | split("\n")[0]')
+          # Two quick merges: the first run's bump already covers the second.
+          if [[ $subject == "release: r"* ]]; then
+            echo "main ($head) is already a release commit; nothing to do"
+            exit 0
+          fi
+
+          gh api "repos/$REPO/contents/REVISION?ref=$head" --jq .content | base64 -d > REVISION
+          cur=$(grep -E '^r[0-9]+$' REVISION)
+          next="r$(( ${cur#r} + 1 ))"
+          sed -i "s/^$cur\$/$next/" REVISION
+          echo "main ($head): $cur -> $next"
+
+          if [ "$DRY_RUN" = true ]; then
+            echo "dry run; not committing"
+            exit 0
+          fi
+
+          # expectedHeadOid makes the commit fail if main moved since the read.
+          jq -n \
+            --arg repo "$REPO" \
+            --arg head "$head" \
+            --arg msg "release: $next" \
+            --arg contents "$(base64 -w0 REVISION)" \
+            '{
+              query: "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }",
+              variables: {input: {
+                branch: {repositoryNameWithOwner: $repo, branchName: "main"},
+                expectedHeadOid: $head,
+                message: {headline: $msg},
+                fileChanges: {additions: [{path: "REVISION", contents: $contents}]}
+              }}
+            }' | gh api graphql --input - --jq '.data.createCommitOnBranch.commit.oid'
