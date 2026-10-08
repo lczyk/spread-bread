@@ -107,6 +107,7 @@ spread-bread/
     build_images.rb              # build + save every published image for one arch, with config digests (ci)
     publish_images.rb            # push to ghcr only the tags whose images changed, then sign (ci)
     config_digest.rb             # image identity that survives pushing (shared by the two above)
+    build_config.rb              # pins, versions and flavours the scripts share, read from the makefile
     hash_inputs.rb               # what each build depends on: make stamps, ci cache keys, release inputs
     bump_revision.rb             # bump REVISION + commit "release: r<N>"
     check_base.sh                # detect upstream ubuntu base digest drift; rewrite @sha256 pins
