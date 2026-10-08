@@ -53,34 +53,12 @@ jobs:
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-  binaries:
+  build:
     needs: revision
-    uses: ./.github/workflows/binaries.yaml
-
-  build-and-test:
-    needs: binaries
-    uses: ./.github/workflows/build-and-test.yaml
-
-  build-oci-native:
-    needs: [binaries, build-and-test]
-    uses: ./.github/workflows/build-oci.yaml
-    with:
-      matrix: >-
-        [{"runner": "ubuntu-24.04",     "arch": "amd64"},
-         {"runner": "ubuntu-24.04-arm", "arch": "arm64"}]
-
-  # qemu lanes publish untested, so they skip the build-and-test gate and
-  # overlap with it. Publishing still waits on the gated native lanes.
-  build-oci-qemu:
-    needs: binaries
-    uses: ./.github/workflows/build-oci.yaml
-    with:
-      matrix: >-
-        [{"runner": "ubuntu-24.04", "arch": "s390x",   "qemu": true},
-         {"runner": "ubuntu-24.04", "arch": "ppc64le", "qemu": true}]
+    uses: ./.github/workflows/build.yaml
 
   push-ghcr:
-    needs: [build-oci-native, build-oci-qemu]
+    needs: build
     uses: ./.github/workflows/push-ghcr.yaml
     permissions:
       contents: read
@@ -88,7 +66,7 @@ jobs:
       id-token: write
 
   publish-release:
-    needs: [revision, binaries, build-oci-native, build-oci-qemu]
+    needs: [revision, build]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

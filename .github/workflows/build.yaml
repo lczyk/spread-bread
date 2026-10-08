@@ -1,0 +1,35 @@
+name: Build
+
+# Reusable. Cross-compiles the go binaries, then builds + tests the native
+# images and builds the image tarballs side by side. Leaves binaries-<arch>
+# and images-<arch> artefacts for the caller. Shared by ci.yaml and
+# release.yaml so both build the same way.
+
+on:
+  workflow_call:
+    inputs:
+      # ci leaves out the native tarballs: build-and-test already builds and
+      # tests those images, and only release.yaml publishes the tarballs.
+      native-images:
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  binaries:
+    uses: ./.github/workflows/binaries.yaml
+
+  build-and-test:
+    needs: binaries
+    uses: ./.github/workflows/build-and-test.yaml
+
+  build-oci:
+    needs: binaries
+    uses: ./.github/workflows/build-oci.yaml
+    with:
+      matrix: >-
+        [${{ inputs.native-images && '{"runner": "ubuntu-24.04", "arch": "amd64"}, {"runner": "ubuntu-24.04-arm", "arch": "arm64"},' || '' }}
+         {"runner": "ubuntu-24.04", "arch": "s390x",   "qemu": true},
+         {"runner": "ubuntu-24.04", "arch": "ppc64le", "qemu": true}]

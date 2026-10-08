@@ -15,16 +15,10 @@ name: Build OCI image tarballs
 on:
   workflow_call:
     inputs:
-      # JSON matrix-include list; callers can narrow to a subset of the
-      # default (e.g. ci builds only the qemu arches to avoid rebuilding
-      # what build-and-test already builds natively).
+      # JSON matrix-include list of {runner, arch, qemu?}; build.yaml owns it.
       matrix:
         type: string
-        default: >-
-          [{"runner": "ubuntu-24.04",     "arch": "amd64"},
-           {"runner": "ubuntu-24.04-arm", "arch": "arm64"},
-           {"runner": "ubuntu-24.04",     "arch": "s390x",   "qemu": true},
-           {"runner": "ubuntu-24.04",     "arch": "ppc64le", "qemu": true}]
+        required: true
 
 permissions:
   contents: read
