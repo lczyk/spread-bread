@@ -1,21 +1,15 @@
 name: Bump revision
 
-# After a PR merges into main, commit "release: r<N+1>" so release.yaml fires.
-# Runs as the bot (BOT_PAT): GITHUB_TOKEN pushes don't trigger workflows, and
-# createCommitOnBranch commits are GitHub-signed, as the main ruleset requires.
-# The bot needs a ruleset bypass for the required ci-ok check.
+# After a PR merges into main, commit "release: r<N+1>" (hack/bump_revision.rb)
+# and push it so release.yaml fires. Pushes as the bot (BOT_PAT) because
+# GITHUB_TOKEN pushes don't trigger workflows; the bot needs a main ruleset
+# bypass (required ci-ok check, signed commits).
 
 on:
   # pull_request_target so BOT_PAT is available; nothing from the PR is run.
   pull_request_target:
     types: [closed]
     branches: [main]
-  workflow_dispatch:
-    inputs:
-      dry_run:
-        description: Compute the next revision without committing it
-        type: boolean
-        default: true
 
 concurrency:
   group: bump-revision
@@ -25,52 +19,31 @@ permissions: {}
 
 jobs:
   bump:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged
+    if: github.event.pull_request.merged
     runs-on: ubuntu-24.04
     timeout-minutes: 5
 
     steps:
-      - name: Commit REVISION bump on main
+      - name: Checkout main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.BOT_PAT }}
+
+      - name: Bump REVISION and push
         env:
-          GH_TOKEN: ${{ secrets.BOT_PAT }}
-          REPO: ${{ github.repository }}
           MERGED_SHA: ${{ github.event.pull_request.merge_commit_sha }}
-          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
-          revision_at() {
-            gh api -H 'Accept: application/vnd.github.raw' "repos/$REPO/contents/REVISION?ref=$1"
-          }
-
-          head=$(gh api "repos/$REPO/commits/main" --jq .sha)
-          revision_at "$head" > REVISION
-          cur=$(grep -E '^r[0-9]+$' REVISION)
           # A bump that landed after this merge already releases it.
-          if [ -n "$MERGED_SHA" ] && ! revision_at "$MERGED_SHA" | grep -qx "$cur"; then
-            echo "main is at $cur, past this merge; nothing to do"
+          if ! git diff --quiet "$MERGED_SHA" HEAD -- REVISION; then
+            echo "REVISION moved since $MERGED_SHA; nothing to do"
             exit 0
           fi
 
-          next="r$(( ${cur#r} + 1 ))"
-          sed -i "s/^$cur\$/$next/" REVISION
-          echo "main ($head): $cur -> $next"
-          if [ "$DRY_RUN" = true ]; then
-            echo "dry run; not committing"
-            exit 0
-          fi
-
-          # expectedHeadOid makes the commit fail if main moved since the read.
-          jq -n \
-            --arg repo "$REPO" \
-            --arg head "$head" \
-            --arg msg "release: $next" \
-            --arg contents "$(base64 -w0 REVISION)" \
-            '{
-              query: "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }",
-              variables: {input: {
-                branch: {repositoryNameWithOwner: $repo, branchName: "main"},
-                expectedHeadOid: $head,
-                message: {headline: $msg},
-                fileChanges: {additions: [{path: "REVISION", contents: $contents}]}
-              }}
-            }' | gh api graphql --input - --jq '.data.createCommitOnBranch.commit.oid'
+          git config user.name  "lczyk-bot"
+          git config user.email "lczyk-bot@users.noreply.github.com"
+          hack/bump_revision.rb
+          # Fails rather than double-bumping if main moved since checkout.
+          git push origin HEAD:main
