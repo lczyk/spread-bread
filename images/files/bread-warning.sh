@@ -6,7 +6,7 @@
 # BREAD_BANNER_FORCE is set.
 #
 # Banner content is verbatim from /etc/bread-banner.txt (shipped from
-# hack/banner.txt). On tty the "!! INSECURE TEST IMAGE !!" header is wrapped
+# images/files/banner.txt). On tty the "!! INSECURE TEST IMAGE !!" header is wrapped
 # in red ANSI; everything else is printed as-is.
 #
 # Note: sshd `Banner` (pre-auth) was considered and rejected. sshd has no

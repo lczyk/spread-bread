@@ -17,9 +17,10 @@ require_relative "build_config"
 Dir.chdir(File.expand_path("..", __dir__))
 
 BREAD_FILES = %w[
-  hack/bread-warning.sh hack/banner.txt hack/tar-shim.sh hack/seccomp-shim.c hack/apt-mirror.sh
+  images/files/bread-warning.sh images/files/banner.txt images/files/tar-shim.sh
+  images/files/seccomp-shim.c images/files/apt-mirror.sh
 ].freeze
-CHISEL_FILES = %w[hack/lazy-apt.sh hack/apt-mirror.sh].freeze
+CHISEL_FILES = %w[images/files/lazy-apt.sh images/files/apt-mirror.sh].freeze
 BINARIES_SCRIPT = "hack/build_binaries.sh"
 # How images are built and saved, as opposed to what goes into them.
 IMAGE_BUILD_SCRIPTS = %w[hack/build_image.sh hack/build_images.rb hack/build_config.rb].freeze
@@ -70,7 +71,7 @@ end
 # Pathspecs rather than files, so `git diff` also sees deletions.
 def release
   ["images/", "templates/", "scripts/", "patches/", "config.yaml", "hack/inline_scripts.rb",
-   BINARIES_SCRIPT, *BREAD_FILES, *CHISEL_FILES, *IMAGE_BUILD_SCRIPTS].uniq
+   BINARIES_SCRIPT, *IMAGE_BUILD_SCRIPTS]
 end
 
 name = ARGV.fetch(0) { abort "usage: hash_inputs.rb <flavour-ver-arch>|binaries-<arch>|images-<arch>|release" }

@@ -73,7 +73,7 @@ jobs:
         run: for f in images-out/*.tar; do docker load -i "$f"; done
 
       # Emulated images get no test suite, so at least log into each one the
-      # way spread does. A running sshd is not enough; see hack/seccomp-shim.c.
+      # way spread does. A running sshd is not enough; see images/files/seccomp-shim.c.
       - name: Log into every ${{ matrix.arch }} image
         if: matrix.qemu
         run: |

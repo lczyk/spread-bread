@@ -7,7 +7,7 @@ ARG APT_MIRROR=
 # Skip man/doc/info install for every subsequent package -- dpkg's man-db
 # trigger is a major cost under qemu emulation (s390x / ppc64le). Persists in
 # the image fs, so the bread-chisel-releases install inherits the exclusion.
-RUN --mount=type=bind,source=hack/apt-mirror.sh,target=/usr/local/bin/bread-apt-mirror \
+RUN --mount=type=bind,source=images/files/apt-mirror.sh,target=/usr/local/bin/bread-apt-mirror \
     --mount=type=tmpfs,target=/run/apt-mirror \
     export APT_CONFIG=/run/apt-mirror/apt.conf && bread-apt-mirror /run/apt-mirror && \
     printf 'path-exclude /usr/share/man/*\npath-exclude /usr/share/doc/*\npath-exclude /usr/share/info/*\n' \
@@ -32,31 +32,31 @@ RUN printf '%s\n' \
     > /etc/pam.d/sshd
 
 # Insecure-image warning. Prints on interactive logins (ssh, `docker exec -it`).
-# See hack/bread-warning.sh for design notes.
-COPY hack/banner.txt        /etc/bread-banner.txt
-COPY hack/bread-warning.sh  /etc/profile.d/00-bread-warning.sh
+# See images/files/bread-warning.sh for design notes.
+COPY images/files/banner.txt       /etc/bread-banner.txt
+COPY images/files/bread-warning.sh /etc/profile.d/00-bread-warning.sh
 RUN chmod 0644 /etc/bread-banner.txt /etc/profile.d/00-bread-warning.sh && \
     printf '\n# bread-warning\n[ -r /etc/profile.d/00-bread-warning.sh ] && . /etc/profile.d/00-bread-warning.sh\n' >> /root/.bashrc
 
 # Extraction shim over /bin/tar, inert unless the host's emulation breaks GNU
-# tar. See hack/tar-shim.sh.
-COPY hack/tar-shim.sh /usr/local/bin/bread-tar-shim
+# tar. See images/files/tar-shim.sh.
+COPY images/files/tar-shim.sh /usr/local/bin/bread-tar-shim
 RUN chmod 0755 /usr/local/bin/bread-tar-shim && \
     dpkg-divert --local --divert /usr/bin/tar.distrib --rename /usr/bin/tar && \
     ln -s /usr/local/bin/bread-tar-shim /usr/bin/tar
 
 # seccomp shim for sshd, inert unless the host's emulation refuses seccomp
-# filters. See hack/seccomp-shim.c. Cross-compiled on the build platform, from
+# filters. See images/files/seccomp-shim.c. Cross-compiled on the build platform, from
 # the same pin as the base above (hack/check_base.sh moves both).
 FROM --platform=$BUILDPLATFORM docker.io/library/ubuntu:26.10@sha256:ee126c2fa0249079a7e24ae3a3d29b04783ef93ab33c868751c9a1289d3fffff AS seccomp-shim
 ARG APT_MIRROR=
-RUN --mount=type=bind,source=hack/apt-mirror.sh,target=/usr/local/bin/bread-apt-mirror \
+RUN --mount=type=bind,source=images/files/apt-mirror.sh,target=/usr/local/bin/bread-apt-mirror \
     --mount=type=tmpfs,target=/run/apt-mirror \
     export APT_CONFIG=/run/apt-mirror/apt.conf && bread-apt-mirror /run/apt-mirror && \
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends clang lld
 ARG TARGETARCH
-RUN --mount=type=bind,source=hack/seccomp-shim.c,target=/src/seccomp-shim.c \
+RUN --mount=type=bind,source=images/files/seccomp-shim.c,target=/src/seccomp-shim.c \
     case "$TARGETARCH" in \
         amd64)   triple=x86_64-linux-gnu ;; \
         arm64)   triple=aarch64-linux-gnu ;; \

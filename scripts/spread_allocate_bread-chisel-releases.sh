@@ -86,7 +86,7 @@ if [ -z "$sshd_up" ]; then
 fi
 
 # A container whose gnu tar cannot extract falls back to bsdtar (see
-# hack/tar-shim.sh); say so rather than swapping the tool silently.
+# images/files/tar-shim.sh); say so rather than swapping the tool silently.
 tar_backend=$(docker exec "$container_name" /usr/local/bin/bread-tar-shim --bread-probe 2>/dev/null || echo unknown)
 if [ "$tar_backend" = bsdtar ]; then
     note="note: gnu tar cannot extract in $container_name (host emulation); using bsdtar"
@@ -109,7 +109,7 @@ else
 fi
 
 # A running sshd can still fail every handshake (openssh's seccomp sandbox
-# under emulation does; see hack/seccomp-shim.c). Say so here, with the
+# under emulation does; see images/files/seccomp-shim.c). Say so here, with the
 # container's logs, rather than leave spread to report a bare EOF.
 if command -v ssh-keyscan >/dev/null 2>&1; then
     handshake=""
