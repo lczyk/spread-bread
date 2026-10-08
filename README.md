@@ -104,7 +104,11 @@ spread-bread/
   hack/
     build_binaries.sh            # cross-compile chisel + spread + docker cli in an ubuntu/go builder (per arch in ci)
     build_image.sh               # per-image build w/ hash-stamp short-circuit
-    hash_inputs.sh               # per-image input hash (drives stamp invalidation)
+    build_images.rb              # build + save every published image for one arch, with config digests (ci)
+    publish_images.rb            # push to ghcr only the tags whose images changed, then sign (ci)
+    config_digest.rb             # image identity that survives pushing (shared by the two above)
+    hash_inputs.rb               # what each build depends on: make stamps, ci cache keys, release inputs
+    bump_revision.rb             # bump REVISION + commit "release: r<N>"
     check_base.sh                # detect upstream ubuntu base digest drift; rewrite @sha256 pins
     inline_scripts.rb            # splice scripts/*.sh into yaml templates
     tar-shim.sh                  # image /bin/tar; routes extraction to bsdtar where gnu tar is broken
@@ -125,7 +129,7 @@ spread-bread/
     contract-{bread,bread-chisel-releases}/run/task.yaml
     _inner-{bread,bread-chisel-releases}/contract/task.yaml
     lib/clean-rootfs             # stand-in for the chisel-releases lib the inlined yamls' restore-each calls
-  .github/workflows/             # ci (build + test) on PR / push to main; revision bump + release on PR merge; daily base-refresh
+  .github/workflows/             # ci (build + test) on PR / push to main; revision bump + release on PR merges that change release inputs; daily base-refresh
 ```
 
 ## using (contributor / dev)
