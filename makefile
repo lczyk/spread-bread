@@ -131,7 +131,7 @@ BINARIES_ENV := CHISEL_REF="$(CHISEL_REF)" SPREAD_REF="$(SPREAD_REF)" GO_BUILDER
 
 $(FULL_BINARIES_STAMPS): .stamp/binaries-%: FORCE | .stamp
 	@set -e ; \
-		new=$$($(BINARIES_ENV) hack/hash_inputs.sh binaries-$*) ; \
+		new=$$($(BINARIES_ENV) hack/hash_inputs.rb binaries-$*) ; \
 		cur=$$(cat $@ 2>/dev/null || true) ; \
 		if [ "$$new" != "$$cur" ]; then \
 			echo "==> building go binaries for $* (chisel + spread + docker)" ; \

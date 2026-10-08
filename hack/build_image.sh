@@ -16,7 +16,7 @@ flavour="${rest%-*}"
 
 stamp=".stamp/$name"
 
-new=$(hack/hash_inputs.sh "$name")
+new=$(hack/hash_inputs.rb "$name")
 cur=$(cat "$stamp" 2>/dev/null || true)
 
 if [ "$new" = "$cur" ]; then

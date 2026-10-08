@@ -6,7 +6,7 @@ name: Base refresh
 # moving that digest. When any base moves, `make update-base` rewrites the
 # pin(s) and this job opens (or updates) a single PR.
 #
-# The pin lives in images/Dockerfile.bread-<ver>, which hack/hash_inputs.sh
+# The pin lives in images/Dockerfile.bread-<ver>, which hack/hash_inputs.rb
 # already hashes, so merging the PR busts the bread stamp and forces a real
 # rebuild on the next build (bread-chisel-releases + bread-test cascade).
 #
