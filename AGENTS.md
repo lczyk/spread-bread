@@ -9,3 +9,4 @@
 ## general
 
 - every chisel feature added by patch files must be behind `CHISEL_HACKS` env variable check. without `CHISEL_HACKS`, chisel ought to behave identially to upstream chisel.
+- PR messages should be very simple, ideally one sentence. they do not need to include all the information about the PR.
