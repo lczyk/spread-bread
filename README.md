@@ -125,7 +125,7 @@ spread-bread/
     contract-{bread,bread-chisel-releases}/run/task.yaml
     _inner-{bread,bread-chisel-releases}/contract/task.yaml
     lib/clean-rootfs             # stand-in for the chisel-releases lib the inlined yamls' restore-each calls
-  .github/workflows/             # ci (build + test) on PR / push to main; release on r* tag; daily base-refresh
+  .github/workflows/             # ci (build + test) on PR / push to main; revision bump + release on PR merge; daily base-refresh
 ```
 
 ## using (contributor / dev)

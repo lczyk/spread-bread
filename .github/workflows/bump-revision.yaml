@@ -1,0 +1,49 @@
+name: Bump revision
+
+# After a PR merges into main, commit "release: r<N+1>" (hack/bump_revision.rb)
+# and push it so release.yaml fires. Pushes as the bot (BOT_PAT) because
+# GITHUB_TOKEN pushes don't trigger workflows; the bot needs a main ruleset
+# bypass (required ci-ok check, signed commits).
+
+on:
+  # pull_request_target so BOT_PAT is available; nothing from the PR is run.
+  pull_request_target:
+    types: [closed]
+    branches: [main]
+
+concurrency:
+  group: bump-revision
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  bump:
+    if: github.event.pull_request.merged
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.BOT_PAT }}
+
+      - name: Bump REVISION and push
+        env:
+          MERGED_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          set -euo pipefail
+          # A bump that landed after this merge already releases it.
+          if ! git diff --quiet "$MERGED_SHA" HEAD -- REVISION; then
+            echo "REVISION moved since $MERGED_SHA; nothing to do"
+            exit 0
+          fi
+
+          git config user.name  "lczyk-bot"
+          git config user.email "lczyk-bot@users.noreply.github.com"
+          hack/bump_revision.rb
+          # Fails rather than double-bumping if main moved since checkout.
+          git push origin HEAD:main
