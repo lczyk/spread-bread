@@ -76,22 +76,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      # A push that bumps REVISION is released as a whole; a PR merge is
-      # bumped by bump-revision.yaml.
+      # A push that bumps REVISION is released as a whole.
       - name: Assert a direct push leaves no release input unreleased
-        if: >-
-          github.event_name == 'push'
-          && github.event.head_commit.committer.username != 'web-flow'
+        if: github.event_name == 'push' && github.event.head_commit.committer.username != 'web-flow'
         env:
           BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
-          if ! git diff --quiet "$BEFORE" HEAD -- REVISION; then
-            exit 0
-          fi
-          last=$(git log -1 --format=%H -- REVISION)
-          if ! git diff --quiet "$last" HEAD -- $(hack/hash_inputs.rb release); then
-            echo "::error::release inputs changed since $last without a REVISION bump -- run hack/bump_revision.rb"
+          git diff --quiet "$BEFORE" HEAD -- REVISION || exit 0
+          if hack/bump_revision.rb --pending; then
+            echo "::error::release inputs changed since the last release without a REVISION bump -- run hack/bump_revision.rb"
             exit 1
           fi
 
