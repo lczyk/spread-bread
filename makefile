@@ -6,7 +6,7 @@ DOCKER ?= docker
 # Cross-compiled go binaries baked into bread-chisel-releases + bread-test.
 # Pinned to specific upstream commits for reproducibility.
 CHISEL_REF := v1.5.0
-SPREAD_REF := 9fdce848027b944a50d25ed2271f17c213b44bd5
+SPREAD_REF := 2026.07.12
 GO_BUILDER_IMAGE := ubuntu/go:1.25-26.04_edge
 # Docker CLI built from docker/cli source at tag v$(DOCKER_VERSION); ubuntu
 # apt's docker.io is built with go 1.24 and crashes under qemu emulation, and
