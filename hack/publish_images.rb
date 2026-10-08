@@ -54,12 +54,12 @@ def plan(dir, repo, out)
   abort "publish_images: no image-digests-*/digests.json under #{dir}" if local.empty?
 
   tags = local.values.flat_map(&:keys).uniq.sort
-  result = tags.to_h do |tag|
-    want = local.transform_values { |d| d.fetch(tag) }
-    have, digest = remote(repo, tag)
-    push = have != want
+  # One thread per tag: each lookup is a handful of sequential registry calls.
+  remotes = tags.map { |tag| Thread.new { remote(repo, tag) } }.map(&:value)
+  result = tags.zip(remotes).to_h do |tag, (have, digest)|
+    push = have != local.transform_values { |d| d.fetch(tag) }
     puts "#{push ? "push" : "skip"} #{tag}"
-    [tag, {"push" => push, "digest" => (push ? nil : digest)}]
+    [tag, {"push" => push, "digest" => digest}]
   end
   File.write(out, JSON.pretty_generate(result) + "\n")
 
@@ -91,7 +91,8 @@ end
 def sign(repo, plan_file, dry_run)
   identity = "^https://github\\.com/#{repo.split("/", 2).last}/\\.github/workflows/"
   JSON.parse(File.read(plan_file)).each do |tag, entry|
-    ref = "#{repo}/#{tag.split(":").first}@#{entry.fetch("digest") or abort "publish_images: no digest for #{tag}"}"
+    digest = entry["digest"] or abort "publish_images: no digest for #{tag}"
+    ref = "#{repo}/#{tag.split(":").first}@#{digest}"
     unless entry["push"]
       verified = system("cosign", "verify", "--certificate-identity-regexp", identity,
                         "--certificate-oidc-issuer", "https://token.actions.githubusercontent.com",
@@ -109,7 +110,8 @@ end
 USAGE = "usage: publish_images.rb plan|push <dir> <repo> <plan.json> | sign <repo> <plan.json> [--dry-run]"
 
 cmd, *args = ARGV
-dry_run = !args.delete("--dry-run").nil?
+dry_run = args.include?("--dry-run")
+args -= ["--dry-run"]
 case [cmd, args.size]
 when ["plan", 3] then plan(*args)
 when ["push", 3] then push(*args)
