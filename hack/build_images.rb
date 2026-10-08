@@ -6,7 +6,9 @@
 #
 # Usage: build_images.rb <arch> <out-dir>
 
+require "fileutils"
 require "json"
+require_relative "build_config"
 require_relative "config_digest"
 
 Dir.chdir(File.expand_path("..", __dir__))
@@ -18,20 +20,21 @@ def run(*cmd)
   system(*cmd) or abort "build_images: #{cmd.join(" ")} failed"
 end
 
+def tar_member(tar, name) = IO.popen(["tar", "-xOf", tar, name], &:read)
+
 # Emulated builds are ~single-core and the per-version chains are
 # independent, so build two at a time; past that they only contend for the
 # runner's cores. -O keeps each image's log whole.
 run("make", "-j2", "-O", "build-bread", "build-bread-chisel-releases", "ARCH=#{arch}")
 
-versions = File.read("makefile")[/^VERSIONS := (.*)$/, 1].split
-Dir.mkdir(out) unless Dir.exist?(out)
+FileUtils.mkdir_p(out)
 
-digests = %w[bread bread-chisel-releases].product(versions).to_h do |flavour, ver|
+digests = BuildConfig::PUBLISHED_FLAVOURS.product(BuildConfig::VERSIONS).to_h do |flavour, ver|
   tar = File.join(out, "#{flavour}-#{ver}-#{arch}.tar")
   puts "==> saving #{flavour}:#{ver}-#{arch}"
   run("docker", "save", "#{flavour}:#{ver}-#{arch}", "-o", tar)
-  config = JSON.parse(IO.popen(["tar", "-xOf", tar, "manifest.json"], &:read)).fetch(0).fetch("Config")
-  ["#{flavour}:#{ver}", ConfigDigest.of(IO.popen(["tar", "-xOf", tar, config], &:read))]
+  config = JSON.parse(tar_member(tar, "manifest.json")).fetch(0).fetch("Config")
+  ["#{flavour}:#{ver}", ConfigDigest.of(tar_member(tar, config))]
 end
 
 File.write(File.join(out, "digests.json"), JSON.pretty_generate(digests) + "\n")

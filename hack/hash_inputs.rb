@@ -12,19 +12,9 @@
 # Prints the hex digest, or for release one pathspec per line.
 
 require "digest"
+require_relative "build_config"
 
 Dir.chdir(File.expand_path("..", __dir__))
-
-MAKEFILE = File.read("makefile")
-
-# Pins and the version matrix live in the makefile; make passes the pins in
-# the environment too, so a command-line override wins.
-def make_var(name)
-  ENV.fetch(name) { MAKEFILE[/^#{name} := (.*)$/, 1] or abort "hash_inputs: #{name} not in makefile" }
-end
-
-VERSIONS = make_var("VERSIONS").split
-PUBLISHED_FLAVOURS = %w[bread bread-chisel-releases].freeze
 
 BREAD_FILES = %w[
   hack/bread-warning.sh hack/banner.txt hack/tar-shim.sh hack/seccomp-shim.c hack/apt-mirror.sh
@@ -32,7 +22,7 @@ BREAD_FILES = %w[
 CHISEL_FILES = %w[hack/lazy-apt.sh hack/apt-mirror.sh].freeze
 BINARIES_SCRIPT = "hack/build_binaries.sh"
 # How images are built and saved, as opposed to what goes into them.
-IMAGE_BUILD_SCRIPTS = %w[hack/build_image.sh hack/build_images.rb].freeze
+IMAGE_BUILD_SCRIPTS = %w[hack/build_image.sh hack/build_images.rb hack/build_config.rb].freeze
 
 def sha256(text) = Digest::SHA256.hexdigest(text)
 
@@ -44,8 +34,13 @@ def stamp_line(name, digest) = "#{sha256("#{digest}\n")}  .stamp/#{name}\n"
 
 def binaries(arch)
   files = [BINARIES_SCRIPT, *Dir["patches/chisel/*.patch"].sort]
-  pins = %w[CHISEL_REF SPREAD_REF GO_BUILDER_IMAGE DOCKER_VERSION].map { |v| "#{v}=#{make_var(v)}\n" }
+  pins = %w[CHISEL_REF SPREAD_REF GO_BUILDER_IMAGE DOCKER_VERSION].map { |v| "#{v}=#{BuildConfig.pin(v)}\n" }
   sha256(files.map { |f| file_line(f) }.join + "ARCH=#{arch}\n" + pins.join)
+end
+
+# Images built FROM bread:<ver> with the go binaries copied in.
+def bread_deps(ver, arch)
+  [stamp_line("bread-#{ver}-#{arch}", image("bread", ver, arch)), stamp_line("binaries-#{arch}", binaries(arch))]
 end
 
 def image(flavour, ver, arch)
@@ -54,13 +49,9 @@ def image(flavour, ver, arch)
     when "bread"
       ["images/Dockerfile.bread-#{ver}", *BREAD_FILES].map { |f| file_line(f) }
     when "bread-chisel-releases"
-      ["images/Dockerfile.bread-chisel-releases-#{ver}", *CHISEL_FILES].map { |f| file_line(f) } +
-        [stamp_line("bread-#{ver}-#{arch}", image("bread", ver, arch)),
-         stamp_line("binaries-#{arch}", binaries(arch))]
+      ["images/Dockerfile.bread-chisel-releases-#{ver}", *CHISEL_FILES].map { |f| file_line(f) } + bread_deps(ver, arch)
     when "bread-test"
-      [file_line("tests/Dockerfile.bread-test-#{ver}"),
-       stamp_line("bread-#{ver}-#{arch}", image("bread", ver, arch)),
-       stamp_line("binaries-#{arch}", binaries(arch))]
+      [file_line("tests/Dockerfile.bread-test-#{ver}"), *bread_deps(ver, arch)]
     else
       abort "hash_inputs: unknown flavour: #{flavour}"
     end
@@ -70,7 +61,7 @@ end
 # The images, plus how they're saved and digested (the digests are cached
 # alongside the tarballs).
 def images(arch)
-  lines = PUBLISHED_FLAVOURS.product(VERSIONS).map do |flavour, ver|
+  lines = BuildConfig::PUBLISHED_FLAVOURS.product(BuildConfig::VERSIONS).map do |flavour, ver|
     "#{image(flavour, ver, arch)}  #{flavour}-#{ver}-#{arch}\n"
   end
   sha256(lines.join + [*IMAGE_BUILD_SCRIPTS, "hack/config_digest.rb"].map { |f| file_line(f) }.join)
