@@ -59,13 +59,13 @@ BREAD_NET=bridge  spread   # force bridge IPs
 
 ubuntu 26.04's patched GNU tar (`1.35+dfsg-4ubuntu0.x`) resolves extraction paths through a syscall Docker Desktop's Rosetta emulation does not implement, so in an amd64 container on apple silicon every archive entry below the top level fails with `Function not implemented`. spread hits this when it unpacks the project, reports `cannot send project content`, and after three tries gives up with `Cannot allocate ... after too many retries`. 26.10 and everything at or below 25.10 are unaffected, as are the qemu-emulated arches.
 
-the images work around it: `/bin/tar` is a shim that probes GNU tar once per container and, if it is broken, routes *extraction* to `bsdtar` (see `hack/tar-shim.sh`). creation stays on GNU tar, which spread needs for `--sort=name` when it packs artifacts. on unaffected hosts the shim is inert.
+the images work around it: `/bin/tar` is a shim that probes GNU tar once per container and, if it is broken, routes *extraction* to `bsdtar` (see `images/files/tar-shim.sh`). creation stays on GNU tar, which spread needs for `--sort=name` when it packs artifacts. on unaffected hosts the shim is inert.
 
 ### sshd under emulation (26.10)
 
 since openssh 10.4, sshd drops a connection before auth when it cannot install its pre-auth seccomp filter, and qemu-user (s390x, ppc64le) and Docker Desktop's Rosetta (amd64 on apple silicon) always refuse that filter. 26.10 ships openssh `10.5p1`, so under emulation every connection ends with `ssh_sandbox_child: prctl(PR_SET_SECCOMP): Invalid argument [preauth]` in sshd's log, and spread gives up with `ssh: handshake failed: EOF`.
 
-the 26.10 images work around it: sshd runs with a preloaded shim that reports success for that one refused call (see `hack/seccomp-shim.c`), so sshd carries on without the sandbox, as openssh did before 10.4. on real hardware the call succeeds and the shim is inert. it only reaches the image's own sshd: one a test starts itself, e.g. from a chisel rootfs under `chroot`, still fails under emulation.
+the 26.10 images work around it: sshd runs with a preloaded shim that reports success for that one refused call (see `images/files/seccomp-shim.c`), so sshd carries on without the sandbox, as openssh did before 10.4. on real hardware the call succeeds and the shim is inert. it only reaches the image's own sshd: one a test starts itself, e.g. from a chisel rootfs under `chroot`, still fails under emulation.
 
 the allocate scripts also wait for a completed ssh handshake (when the host has `ssh-keyscan`) and fail with sshd's log if none comes, so a failure of this kind shows up at allocation rather than as a bare `EOF` from spread.
 
@@ -113,11 +113,12 @@ spread-bread/
     bump_revision.rb             # bump REVISION + commit "release: r<N>"
     check_base.sh                # detect upstream ubuntu base digest drift; rewrite @sha256 pins
     inline_scripts.rb            # splice scripts/*.sh into yaml templates
-    tar-shim.sh                  # image /bin/tar; routes extraction to bsdtar where gnu tar is broken
-    seccomp-shim.c               # preloaded into 26.10's sshd; lets it log in where emulation refuses seccomp
-    apt-mirror.sh                # build-time apt mirror override, bind-mounted into image builds by ci
   scripts/                       # allocate / discard scripts, one pair per flavour
   images/                        # one Dockerfile per (flavour, ubuntu version)
+    files/                       # copied / bind-mounted into the images by the Dockerfiles
+      tar-shim.sh                # image /bin/tar; routes extraction to bsdtar where gnu tar is broken
+      seccomp-shim.c             # preloaded into 26.10's sshd; lets it log in where emulation refuses seccomp
+      apt-mirror.sh              # build-time apt mirror override, bind-mounted into image builds by ci
   templates/                     # yaml templates with `source scripts/...` markers
   inlined/                       # generated self-contained spread yamls (release artefacts)
   cache/binaries/                # gitignored; cross-compiled chisel / spread / docker per arch
