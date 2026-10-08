@@ -1,15 +1,16 @@
 name: Bump revision
 
 # After a PR merges into main, commit "release: r<N+1>" (hack/bump_revision.rb)
-# and push it so release.yaml fires. Pushes as the bot (BOT_PAT) because
-# GITHUB_TOKEN pushes don't trigger workflows; the bot needs a main ruleset
-# bypass (required ci-ok check, signed commits).
+# and push it so release.yaml fires. A merge done on GitHub is committed by
+# web-flow; local pushes (and the bot's own bumps) are not, so they don't
+# bump. Pushes as the bot (BOT_PAT) because GITHUB_TOKEN pushes don't trigger
+# workflows; the bot needs a main ruleset bypass (required ci-ok check,
+# signed commits).
 
 on:
-  # pull_request_target so BOT_PAT is available; nothing from the PR is run.
-  pull_request_target:
-    types: [closed]
+  push:
     branches: [main]
+    paths-ignore: [REVISION]
 
 concurrency:
   group: bump-revision
@@ -19,7 +20,7 @@ permissions: {}
 
 jobs:
   bump:
-    if: github.event.pull_request.merged
+    if: github.event.head_commit.committer.username == 'web-flow'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
 
@@ -33,7 +34,7 @@ jobs:
 
       - name: Bump REVISION and push
         env:
-          MERGED_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          MERGED_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           # A bump that landed after this merge already releases it.
