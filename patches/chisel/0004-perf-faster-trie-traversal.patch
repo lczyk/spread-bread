@@ -1,20 +1,29 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: spread-bread <lczyk@spread-bread>
-Date: Sun, 27 Sep 2026 12:00:00 +0100
-Subject: [PATCH] perf: faster trie traversal
+Date: Thu, 8 Oct 2026 12:00:00 +0100
+Subject: [PATCH] perf: faster trie traversal via CHISEL_HACKS
 
-letFunny/chisel#29 on top of the previous patch: reuse the traversal
-queues across paths, and look up literal child segments directly instead
-of scanning every sibling. only reachable via CHISEL_HACKS=1.
+letFunny/chisel#29 on top of upstream's trie (canonical/chisel#302): reuse
+the traversal queues across paths, and look up literal child segments
+directly instead of scanning every sibling. gated on CHISEL_HACKS=1; unset
+keeps upstream's traversal.
 ---
- internal/setup/conflict.go |   47 ++++++++++++++++++++++++++++++++++++++------
- 1 file changed, 41 insertions(+), 6 deletions(-)
+ internal/setup/conflict.go | 52 +++++++++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 47 insertions(+), 5 deletions(-)
 
 diff --git a/internal/setup/conflict.go b/internal/setup/conflict.go
-index 4fceaeb..5310a68 100644
+index 4fceaeb..89c57bc 100644
 --- a/internal/setup/conflict.go
 +++ b/internal/setup/conflict.go
-@@ -32,6 +32,10 @@ type node struct {
+@@ -4,6 +4,7 @@ import (
+ 	"errors"
+ 	"fmt"
+ 	"maps"
++	"os"
+ 	"slices"
+ 	"strings"
+
+@@ -32,6 +33,10 @@ type node struct {
  	Segment       segment
  	SegmentSlices []*segmentSlice
  	Children      map[string]*node
@@ -25,10 +34,13 @@ index 4fceaeb..5310a68 100644
  }
 
  // pathConflictTree uses a custom trie to find conflicts that might arise from
-@@ -52,6 +56,10 @@ type node struct {
+@@ -52,6 +57,13 @@ type node struct {
  type pathConflictTree struct {
  	Root         *node
  	PathToSlices map[string][]*Slice
++	// Fast prunes the candidate children by segment and reuses the queues
++	// across paths. Set by CHISEL_HACKS=1; unset keeps upstream's traversal.
++	Fast bool
 +	// currentQueue and nextQueue are kept across pathHasConflict calls so
 +	// that the traversal does not have to grow fresh queues for every path.
 +	currentQueue []*node
@@ -36,18 +48,26 @@ index 4fceaeb..5310a68 100644
  }
 
  var rootSegment = segment{"/", false, false}
-@@ -100,12 +108,19 @@ func (g *pathConflictTree) pathHasConflict(newSegments []segment, newSegmentSlic
- 		return fmt.Errorf("slices %s and %s conflict on %s and %s", oldSlice, newSlice, oldPath, newPath)
+@@ -61,7 +73,7 @@ func newConflictTree(pathToSlices map[string][]*Slice) pathConflictTree {
+ 		Segment:  rootSegment,
+ 		Children: map[string]*node{},
  	}
+-	return pathConflictTree{Root: root, PathToSlices: pathToSlices}
++	return pathConflictTree{Root: root, PathToSlices: pathToSlices, Fast: os.Getenv("CHISEL_HACKS") == "1"}
+ }
 
--	var currentQueue []*node
--	var nextQueue []*node
-+	currentQueue := g.currentQueue[:0]
-+	nextQueue := g.nextQueue[:0]
-+	defer func() {
-+		// Keep the grown queues for the next call.
-+		g.currentQueue, g.nextQueue = currentQueue, nextQueue
-+	}()
+ func (g *pathConflictTree) HasConflict() error {
+@@ -102,10 +114,20 @@ func (g *pathConflictTree) pathHasConflict(newSegments []segment, newSegmentSlic
+
+ 	var currentQueue []*node
+ 	var nextQueue []*node
++	if g.Fast {
++		currentQueue, nextQueue = g.currentQueue[:0], g.nextQueue[:0]
++		defer func() {
++			// Keep the grown queues for the next call.
++			g.currentQueue, g.nextQueue = currentQueue, nextQueue
++		}()
++	}
 
  	// Skip "/".
 -	currentQueue = slices.Collect(maps.Values(g.Root.Children))
@@ -55,31 +75,31 @@ index 4fceaeb..5310a68 100644
 +	if len(newSegments) == 0 {
 +		return nil
 +	}
-+	currentQueue = appendCandidates(currentQueue, g.Root, newSegments[0])
++	currentQueue = g.appendCandidates(currentQueue, g.Root, newSegments[0])
 
  	// If we run out of segments from the graph or the path there cannot be a
  	// conflict.
-@@ -152,8 +167,8 @@ func (g *pathConflictTree) pathHasConflict(newSegments []segment, newSegmentSlic
+@@ -152,8 +174,8 @@ func (g *pathConflictTree) pathHasConflict(newSegments []segment, newSegmentSlic
  								// If we are at the terminal node of both paths we found a conflict.
  								return conflictErrMsg(oldSegmentSlice, newSegmentSlice)
  							}
 -							for _, child := range oldNode.Children {
 -								nextQueue = append(nextQueue, child)
 +							if len(newSegments) > 1 {
-+								nextQueue = appendCandidates(nextQueue, oldNode, newSegments[1])
++								nextQueue = g.appendCandidates(nextQueue, oldNode, newSegments[1])
  							}
  							break oldNodeLoop
  						} else {
-@@ -174,6 +189,23 @@ func (g *pathConflictTree) pathHasConflict(newSegments []segment, newSegmentSlic
+@@ -174,6 +196,23 @@ func (g *pathConflictTree) pathHasConflict(newSegments []segment, newSegmentSlic
  	return nil
  }
 
 +// appendCandidates appends the children of parent that can possibly match
 +// seg. A segment with a wildcard can match any child, but a literal segment
 +// can only match the child with the exact same text or children with
-+// wildcards.
-+func appendCandidates(queue []*node, parent *node, seg segment) []*node {
-+	if seg.HasGlob {
++// wildcards. Without Fast every child is a candidate.
++func (g *pathConflictTree) appendCandidates(queue []*node, parent *node, seg segment) []*node {
++	if !g.Fast || seg.HasGlob {
 +		for _, child := range parent.Children {
 +			queue = append(queue, child)
 +		}
@@ -94,7 +114,7 @@ index 4fceaeb..5310a68 100644
  // insertSegments inserts the path's segments blindly in the graph without
  // looking at conflicts.
  func (g *pathConflictTree) insertSegments(segments []segment, segmentSlices []*segmentSlice) {
-@@ -188,9 +220,12 @@ func (g *pathConflictTree) insertSegments(segments []segment, segmentSlices []*s
+@@ -188,9 +227,12 @@ func (g *pathConflictTree) insertSegments(segments []segment, segmentSlices []*s
  				Segment:  segment,
  				Children: map[string]*node{},
  			}
