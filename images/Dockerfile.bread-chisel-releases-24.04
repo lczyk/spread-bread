@@ -11,7 +11,7 @@ FROM bread:${BASE_TAG}
 ARG BUILD_ARCH
 ARG APT_MIRROR=
 
-RUN --mount=type=bind,source=hack/apt-mirror.sh,target=/usr/local/bin/bread-apt-mirror \
+RUN --mount=type=bind,source=images/files/apt-mirror.sh,target=/usr/local/bin/bread-apt-mirror \
     --mount=type=tmpfs,target=/run/apt-mirror \
     export APT_CONFIG=/run/apt-mirror/apt.conf && bread-apt-mirror /run/apt-mirror && \
     apt-get update && \
@@ -30,5 +30,5 @@ RUN chmod +x /usr/local/bin/chisel-hacked /usr/local/bin/docker && \
 # Lazy-apt shim: auto-runs apt-get update on first non-update apt/apt-get call,
 # then self-destructs so subsequent calls hit real apt directly.
 # Needed because the image is built with apt lists wiped (apt-get clean above).
-COPY hack/lazy-apt.sh /usr/local/bin/apt-get
+COPY images/files/lazy-apt.sh /usr/local/bin/apt-get
 RUN chmod +x /usr/local/bin/apt-get && cp /usr/local/bin/apt-get /usr/local/bin/apt

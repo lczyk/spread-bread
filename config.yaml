@@ -1,0 +1,27 @@
+# Pins and the build matrix, read by hack/build_config.rb. A release input:
+# changing anything here cuts a new release.
+
+# Go binaries baked into bread-chisel-releases + bread-test.
+pins:
+  CHISEL_REF: v1.5.1
+  SPREAD_REF: "2026.07.12"
+  GO_BUILDER_IMAGE: ubuntu/go:1.25-26.04_edge
+  # Docker CLI built from source: apt's docker.io crashes under qemu, and
+  # docker.com's static tarballs don't cover s390x / ppc64le.
+  DOCKER_VERSION: 29.8.0
+
+versions: ["22.04", "24.04", "25.10", "26.04", "26.10"]
+
+# Non-native arches build under qemu and publish untested.
+arches:
+  amd64:
+  arm64:
+  s390x:
+    native: false
+  ppc64le:
+    native: false
+
+# Published to ghcr (bread-test is test infra only).
+flavours:
+  - bread
+  - bread-chisel-releases

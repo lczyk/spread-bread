@@ -1,10 +1,10 @@
 name: Build OCI image tarballs
 
-# Reusable. Per-arch runner builds bread + bread-chisel-releases
-# images into the local daemon and `docker save`s each to a
-# docker-archive tarball. Tarballs upload as artefacts
-# (images-<arch>) so downstream jobs can stitch a multiarch
-# manifest or attach to releases without rebuilding.
+# Reusable. Per-arch runner builds bread + bread-chisel-releases images and
+# saves each as a docker-archive tarball (hack/build_images.rb). Tarballs
+# upload as images-<arch>, and their config digests alone as
+# image-digests-<arch>, so the publish step can tell what changed before
+# downloading any tarball.
 #
 # amd64 / arm64 build on native runners; s390x / ppc64le have no hosted
 # runners and build under qemu on amd64 (slow; published after only a login
@@ -45,42 +45,27 @@ jobs:
           name: binaries-${{ matrix.arch }}
           path: .
 
-      # Cache the saved tarballs keyed on everything that affects image
-      # content (same input set hack/hash_inputs.sh stamps on, incl.
-      # .stamp/binaries-<arch> restored above). Hit -> skip the build
-      # entirely; matters most for the slow qemu lanes. Miss -> build and
-      # the cache auto-saves at job end.
+      - name: Hash image inputs
+        id: inputs
+        run: echo "hash=$(hack/hash_inputs.rb images-${{ matrix.arch }})" >> "$GITHUB_OUTPUT"
+
+      # Hit -> skip the build entirely; matters most for the slow qemu lanes.
+      # Miss -> build and the cache auto-saves at job end.
       - name: Restore image tarball cache
         id: images-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: images-out/
-          key: images-${{ matrix.arch }}-${{ hashFiles('images/Dockerfile.*', 'hack/bread-warning.sh', 'hack/banner.txt', 'hack/tar-shim.sh', 'hack/seccomp-shim.c', 'hack/lazy-apt.sh', 'hack/apt-mirror.sh', 'hack/build_image.sh', format('.stamp/binaries-{0}', matrix.arch)) }}
+          key: images-${{ matrix.arch }}-${{ steps.inputs.outputs.hash }}
 
       # Needed on a cache hit too: the login check below runs the images.
       - name: Set up qemu (emulated arches only)
         if: matrix.qemu
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
-      # Emulated builds are ~single-core and the per-version chains are
-      # independent, so run them in parallel. Past 2 they only contend for
-      # the runner's cores. -O keeps each image's log whole.
-      - name: Bake bread + bread-chisel-releases images for ${{ matrix.arch }}
+      - name: Build + save ${{ matrix.arch }} images
         if: steps.images-cache.outputs.cache-hit != 'true'
-        run: make -j2 -O build-bread build-bread-chisel-releases ARCH=${{ matrix.arch }}
-
-      - name: Save images as docker-archive tarballs
-        if: steps.images-cache.outputs.cache-hit != 'true'
-        run: |
-          set -e
-          mkdir -p images-out
-          for flavour in bread bread-chisel-releases; do
-            for ver in 22.04 24.04 25.10 26.04 26.10; do
-              tag="$flavour:$ver-${{ matrix.arch }}"
-              echo "==> saving $tag"
-              docker save "$tag" -o "images-out/$flavour-$ver-${{ matrix.arch }}.tar"
-            done
-          done
+        run: hack/build_images.rb ${{ matrix.arch }} images-out
 
       # A cache hit skips the bake, so the daemon has nothing to run yet.
       - name: Load cached ${{ matrix.arch }} images
@@ -88,7 +73,7 @@ jobs:
         run: for f in images-out/*.tar; do docker load -i "$f"; done
 
       # Emulated images get no test suite, so at least log into each one the
-      # way spread does. A running sshd is not enough; see hack/seccomp-shim.c.
+      # way spread does. A running sshd is not enough; see images/files/seccomp-shim.c.
       - name: Log into every ${{ matrix.arch }} image
         if: matrix.qemu
         run: |
@@ -124,3 +109,9 @@ jobs:
         with:
           name: images-${{ matrix.arch }}
           path: images-out/
+
+      - name: Upload ${{ matrix.arch }} image digests
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: image-digests-${{ matrix.arch }}
+          path: images-out/digests.json

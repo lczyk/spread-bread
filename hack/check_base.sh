@@ -4,7 +4,7 @@
 # Each images/Dockerfile.bread-<ver> pins its base by digest in its first FROM:
 #   FROM <registry/repo>:<tag>@sha256:<manifest-list-digest>
 # This script resolves the *live* manifest-list digest for each base and
-# compares it to the pinned one. The pin is part of hack/hash_inputs.sh's
+# compares it to the pinned one. The pin is part of hack/hash_inputs.rb's
 # hash for the bread flavour, so bumping it busts the image stamp and forces a
 # rebuild (bread-chisel-releases + bread-test cascade off .stamp/bread-%).
 #

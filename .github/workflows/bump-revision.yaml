@@ -1,11 +1,12 @@
 name: Bump revision
 
 # After a PR merges into main, commit "release: r<N+1>" (hack/bump_revision.rb)
-# and push it so release.yaml fires. A merge done on GitHub is committed by
-# web-flow; local pushes (and the bot's own bumps) are not, so they don't
-# bump. Pushes as the bot (BOT_PAT) because GITHUB_TOKEN pushes don't trigger
-# workflows; the bot needs a main ruleset bypass (required ci-ok check,
-# signed commits).
+# and push it so release.yaml fires -- but only if something that ends up in
+# a release changed (hack/hash_inputs.rb release), so REVISION moves exactly
+# when the artefacts do. A merge done on GitHub is committed by web-flow;
+# local pushes (and the bot's own bumps) are not, so they don't bump. Pushes
+# as the bot (BOT_PAT) because GITHUB_TOKEN pushes don't trigger workflows;
+# the bot needs a main ruleset bypass (required ci-ok check, signed commits).
 
 on:
   push:
@@ -40,6 +41,10 @@ jobs:
           # A bump that landed after this merge already releases it.
           if ! git diff --quiet "$MERGED_SHA" HEAD -- REVISION; then
             echo "REVISION moved since $MERGED_SHA; nothing to do"
+            exit 0
+          fi
+          if ! hack/bump_revision.rb --pending "$MERGED_SHA"; then
+            echo "no release inputs changed since the last release; nothing to do"
             exit 0
           fi
 
