@@ -44,6 +44,7 @@ jobs:
       - name: Stitch multiarch manifests + push
         run: |
           set -e
+          mkdir -p digests
           for flavour in bread bread-chisel-releases; do
             for ver in 22.04 24.04 25.10 26.04 26.10; do
               m="$flavour-$ver-manifest"
@@ -52,7 +53,8 @@ jobs:
                 buildah manifest add --arch "$arch" "$m" \
                   "docker-archive:images-$arch/$flavour-$ver-$arch.tar"
               done
-              buildah manifest push --format oci --all "$m" \
+              buildah manifest push --format oci --all \
+                --digestfile "digests/$flavour-$ver" "$m" \
                 "docker://$REGISTRY/${{ github.repository }}/$flavour:$ver"
               buildah manifest rm "$m"
             done
@@ -67,13 +69,14 @@ jobs:
               cosign login --username "${{ github.actor }}" \
                   --password-stdin "$REGISTRY"
 
+      # Sign the digest just pushed, not the tag, which could move in between.
       - name: Sign each multiarch manifest (keyless OIDC)
         run: |
           set -e
           for flavour in bread bread-chisel-releases; do
             for ver in 22.04 24.04 25.10 26.04 26.10; do
               cosign sign --yes \
-                "$REGISTRY/${{ github.repository }}/$flavour:$ver"
+                "$REGISTRY/${{ github.repository }}/$flavour@$(cat "digests/$flavour-$ver")"
             done
           done
 
