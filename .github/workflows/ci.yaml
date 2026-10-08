@@ -55,3 +55,24 @@ jobs:
             echo "::error::inlined/*.yaml is stale -- run 'make inline' and commit the result"
             exit 1
           fi
+
+  # The one check the main ruleset requires, so it doesn't have to list every
+  # matrix job by name. always() makes a failed or cancelled dependency fail
+  # this job; a skipped required check would count as passing.
+  ci-ok:
+    if: always()
+    needs: [binaries, build-and-test, build-oci, check-inlined]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Assert every job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for r in $RESULTS; do
+            if [ "$r" != success ]; then
+              echo "::error::a job ended as $r"
+              exit 1
+            fi
+          done
