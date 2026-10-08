@@ -38,7 +38,7 @@ jobs:
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | \
               buildah login --username "${{ github.actor }}" \
-                  --password-stdin ghcr.io
+                  --password-stdin "${REPO%%/*}"
 
       - name: Plan which tags to push
         id: plan
@@ -62,7 +62,7 @@ jobs:
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | \
               cosign login --username "${{ github.actor }}" \
-                  --password-stdin ghcr.io
+                  --password-stdin "${REPO%%/*}"
 
       - name: Sign pushed manifests, re-sign skipped ones that don't verify
         run: hack/publish_images.rb sign "$REPO" plan.json
