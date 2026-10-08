@@ -42,8 +42,9 @@ RUN chmod 0644 /etc/bread-banner.txt /etc/profile.d/00-bread-warning.sh && \
 # tar. See images/files/tar-shim.sh.
 COPY images/files/tar-shim.sh /usr/local/bin/bread-tar-shim
 RUN chmod 0755 /usr/local/bin/bread-tar-shim && \
-    dpkg-divert --local --divert /usr/bin/tar.distrib --rename /usr/bin/tar && \
-    ln -s /usr/local/bin/bread-tar-shim /usr/bin/tar
+    dpkg-divert --local --no-rename --divert /usr/bin/tar.distrib /usr/bin/tar && \
+    cp -a /usr/bin/tar /usr/bin/tar.distrib && \
+    ln -sf /usr/local/bin/bread-tar-shim /usr/bin/tar
 
 EXPOSE 22
 CMD ["/usr/sbin/sshd", "-D"]
