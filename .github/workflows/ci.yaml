@@ -1,8 +1,7 @@
 name: CI
 run-name: CI for ${{ github.ref }}
 
-# Build + test on PR and on push to main (except REVISION bumps). No
-# publishing.
+# Build + test on PR and on push to main. No publishing.
 
 on:
   pull_request:
