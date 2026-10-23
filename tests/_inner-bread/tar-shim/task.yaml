@@ -53,6 +53,15 @@ execute: |
       exit 1
   }
 
+  # dpkg-deb unpacks control members with a flag only gnu tar has. On a host
+  # where the fallback is active it is dropped, but extraction must still work.
+  mkdir "$work/out3"
+  ( cd "$work/out3" && /bin/tar -xf - --warning=no-timestamp < "$work/t.tar" )
+  test -f "$work/out3/a/b/f" || {
+      echo "dpkg-style extraction failed"
+      exit 1
+  }
+
   # ... and packs artifacts with flags only gnu tar has. On a host where the
   # fallback is active they are dropped, but the archive must still come out.
   /bin/tar -C "$work/src" -cz --sort=name --ignore-failed-read -- a/b/f > "$work/art.tgz"

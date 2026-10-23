@@ -80,23 +80,26 @@ if [ -n "$_bsdtar_mode" ] && command -v bsdtar >/dev/null 2>&1 && _gnu_tar_broke
         (*) _first="-$1"; shift; set -- "$_first" "$@" ;;
     esac
 
-    # -a tar so diagnostics read as tar:, not bsdtar: or tar.distrib:.
-    if [ "$_bsdtar_mode" = x ]; then
-        exec -a tar bsdtar --no-xattrs --no-mac-metadata "$@"
-    fi
-
-    # Creating: bsdtar has no equivalent of these, and refuses to run when
-    # given them. Dropping --sort costs archive-order determinism, and
-    # --ignore-failed-read costs a nonzero exit on unreadable members; both
-    # beat not producing an archive at all.
+    # bsdtar has no equivalent of these, and refuses to run when given them.
+    # --warning only tunes GNU tar's diagnostics, and dpkg-deb passes it on
+    # every unpack, so it goes quietly. Dropping --sort costs archive-order
+    # determinism, and --ignore-failed-read costs a nonzero exit on unreadable
+    # members; both beat not producing an archive at all.
     _args=()
     for _a in "$@"; do
         case "$_a" in
+            (--warning=*) ;;
             (--sort=*|--ignore-failed-read)
                 echo "tar: dropping $_a: not supported by the bsdtar fallback" >&2 ;;
             (*) _args+=("$_a") ;;
         esac
     done
+
+    # -a tar so diagnostics read as tar:, not bsdtar: or tar.distrib:.
+    if [ "$_bsdtar_mode" = x ]; then
+        exec -a tar bsdtar --no-xattrs --no-mac-metadata "${_args[@]}"
+    fi
+
     # --format first, so an explicit --format from the caller still wins.
     exec -a tar bsdtar --format=gnutar "${_args[@]}"
 fi
