@@ -3,7 +3,11 @@ run-name: Release ${{ github.event.head_commit.message || github.ref_name }}
 
 # Build + test + publish whenever REVISION changes on main: the bot's
 # "release: r<N>" commit after a PR merge (bump-revision.yaml), or a bump
-# pushed by hand. The r<N> tag is created on that commit at publish time.
+# pushed by hand. The r<N> tag is pushed onto that commit at publish time,
+# before the release object is created: a release created against a bare
+# target_commitish makes GitHub diff it with main, and if main has moved
+# on by a workflow-file change in the meantime the API demands a
+# `workflows` scope GITHUB_TOKEN cannot hold (cli/cli#9514).
 # Rolling: only the latest GitHub release survives -- it is always named
 # "downloads" and carries the inlined/*.yaml distribution artefacts +
 # precompiled spread binaries (with sha256 sidecars and cosign keyless
@@ -122,26 +126,17 @@ jobs:
               "$f"
           done
 
-      - name: Delete prior r* release objects (keep their refs)
+      # No-op on a re-run: the revision job already checked that an existing
+      # tag points at this commit.
+      - name: Push the r* tag onto this commit
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          KEEP: ${{ needs.revision.outputs.tag }}
-        run: |
-          set -e
-          gh release list --json tagName --jq '.[].tagName' | \
-            grep -E '^r[0-9]+$' | \
-            while read -r t; do
-              if [ "$t" != "$KEEP" ]; then
-                echo "Deleting prior release object: $t (ref preserved)"
-                gh release delete "$t" --yes || true
-              fi
-            done
+          TAG: ${{ needs.revision.outputs.tag }}
+        run: git push origin "$GITHUB_SHA:refs/tags/$TAG"
 
       - name: Create release "downloads" w/ yamls + spread binaries attached
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ needs.revision.outputs.tag }}
-          target_commitish: ${{ github.sha }}
           name: downloads
           files: release-out/*
           make_latest: true
@@ -186,3 +181,20 @@ jobs:
             **ghcr image tags** stay around indefinitely under their
             per-version tag (`ghcr.io/lczyk/spread-bread/<flavour>:<ver>`)
             and are signed via cosign keyless OIDC at publish time.
+
+      # Only after the new release exists, so a failed publish never leaves
+      # the repo without a "latest" release.
+      - name: Delete prior r* release objects (keep their refs)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KEEP: ${{ needs.revision.outputs.tag }}
+        run: |
+          set -e
+          gh release list --json tagName --jq '.[].tagName' | \
+            grep -E '^r[0-9]+$' | \
+            while read -r t; do
+              if [ "$t" != "$KEEP" ]; then
+                echo "Deleting prior release object: $t (ref preserved)"
+                gh release delete "$t" --yes || true
+              fi
+            done
