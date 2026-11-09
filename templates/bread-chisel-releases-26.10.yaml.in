@@ -40,6 +40,12 @@ backends:
       - ubuntu-26.10-ppc64le:
           password: bread
           workers: 4
+      - ubuntu-26.10-riscv64:
+          password: bread
+          workers: 4
+      - ubuntu-26.10-armhf:
+          password: bread
+          workers: 4
 
 # One instance serves every task of a run, so rootfs'es have to go as they finish.
 restore-each: clean-rootfs

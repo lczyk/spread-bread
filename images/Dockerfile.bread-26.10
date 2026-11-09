@@ -5,7 +5,7 @@ FROM docker.io/library/ubuntu:26.10@sha256:93e29beff5257b2cdf1c024d831f6d2997e53
 ARG APT_MIRROR=
 
 # Skip man/doc/info install for every subsequent package -- dpkg's man-db
-# trigger is a major cost under qemu emulation (s390x / ppc64le). Persists in
+# trigger is a major cost under qemu emulation (non-native arches). Persists in
 # the image fs, so the bread-chisel-releases install inherits the exclusion.
 RUN --mount=type=bind,source=images/files/apt-mirror.sh,target=/usr/local/bin/bread-apt-mirror \
     --mount=type=tmpfs,target=/run/apt-mirror \
@@ -63,6 +63,8 @@ RUN --mount=type=bind,source=images/files/seccomp-shim.c,target=/src/seccomp-shi
         arm64)   triple=aarch64-linux-gnu ;; \
         s390x)   triple=s390x-linux-gnu ;; \
         ppc64le) triple=powerpc64le-linux-gnu ;; \
+        riscv64) triple=riscv64-linux-gnu ;; \
+        arm)     triple=armv7a-linux-gnueabihf ;; \
         *) echo "no seccomp-shim target for $TARGETARCH" >&2; exit 1 ;; \
     esac && \
     clang --target="$triple" -O2 -Wall -fPIC -shared -nostdlib -fuse-ld=lld \

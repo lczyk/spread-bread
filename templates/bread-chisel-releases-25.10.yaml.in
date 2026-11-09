@@ -38,6 +38,12 @@ backends:
       - ubuntu-25.10-ppc64le:
           password: bread
           workers: 4
+      - ubuntu-25.10-riscv64:
+          password: bread
+          workers: 4
+      - ubuntu-25.10-armhf:
+          password: bread
+          workers: 4
 
 suites:
   tests/spread/integration/:

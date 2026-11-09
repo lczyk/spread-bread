@@ -20,7 +20,7 @@ prebuilt docker images + ready-to-use spread yamls so you can drop Canonical [`s
 
 ## flavours
 
-two image flavours, each for ubuntu 22.04, 24.04, 25.10, 26.04, 26.10 x amd64 / arm64 / s390x / ppc64le, published as multiarch tags at `ghcr.io/lczyk/spread-bread/<flavour>:<ver>`. heads-up: s390x + ppc64le images build under qemu and ship with only a login check (no native runners); amd64 + arm64 are tested on every release:
+two image flavours, each for ubuntu 22.04, 24.04, 25.10, 26.04, 26.10 x amd64 / arm64 / s390x / ppc64le / riscv64 / armhf, published as multiarch tags at `ghcr.io/lczyk/spread-bread/<flavour>:<ver>`. heads-up: s390x, ppc64le, riscv64 and armhf images build under qemu and ship with only a login check (no native runners); amd64 + arm64 are tested on every release:
 
 - **`bread`** -- base: ubuntu + sshd. general-purpose spread system; the test suite installs whatever else it needs.
 - **`bread-chisel-releases`** -- bread + `chisel` + the shell + container tooling typically needed by [chisel-releases](https://github.com/canonical/chisel-releases) spread tests (curl, wget, git, jq, file, sudo, tree, docker, skopeo). `chisel` and `docker` are built from source (canonical/chisel + docker/cli pinned by version tag) so the bundled binaries are go 1.25+ and survive qemu emulation.
@@ -55,6 +55,16 @@ BREAD_NET=publish spread   # force port-publishing (e.g. to test the macOS path 
 BREAD_NET=bridge  spread   # force bridge IPs
 ```
 
+### non-native arches (qemu)
+
+s390x, ppc64le, riscv64 and armhf systems run under qemu-user. Docker Desktop ships the binfmt handlers already; on a linux host register them first (they don't survive a reboot):
+
+```
+docker run --privileged --rm tonistiigi/binfmt --install all
+```
+
+expect these to be several times slower than native. there are no i386 systems since ubuntu publishes no i386 image. to test i386 slices, `chisel cut --arch i386` from an amd64 system.
+
 ### tar under emulation (amd64 on apple silicon)
 
 ubuntu 26.04's patched GNU tar (`1.35+dfsg-4ubuntu0.x`) resolves extraction paths through a syscall Docker Desktop's Rosetta emulation does not implement, so in an amd64 container on apple silicon every archive entry below the top level fails with `Function not implemented`. spread hits this when it unpacks the project, reports `cannot send project content`, and after three tries gives up with `Cannot allocate ... after too many retries`. 26.10 and everything at or below 25.10 are unaffected, as are the qemu-emulated arches.
@@ -63,7 +73,7 @@ the images work around it: `/bin/tar` is a shim that probes GNU tar once per con
 
 ### sshd under emulation (26.10)
 
-since openssh 10.4, sshd drops a connection before auth when it cannot install its pre-auth seccomp filter, and qemu-user (s390x, ppc64le) and Docker Desktop's Rosetta (amd64 on apple silicon) always refuse that filter. 26.10 ships openssh `10.5p1`, so under emulation every connection ends with `ssh_sandbox_child: prctl(PR_SET_SECCOMP): Invalid argument [preauth]` in sshd's log, and spread gives up with `ssh: handshake failed: EOF`.
+since openssh 10.4, sshd drops a connection before auth when it cannot install its pre-auth seccomp filter, and qemu-user (every non-native arch) and Docker Desktop's Rosetta (amd64 on apple silicon) always refuse that filter. 26.10 ships openssh `10.5p1`, so under emulation every connection ends with `ssh_sandbox_child: prctl(PR_SET_SECCOMP): Invalid argument [preauth]` in sshd's log, and spread gives up with `ssh: handshake failed: EOF`.
 
 the 26.10 images work around it: sshd runs with a preloaded shim that reports success for that one refused call (see `images/files/seccomp-shim.c`), so sshd carries on without the sandbox, as openssh did before 10.4. on real hardware the call succeeds and the shim is inert. it only reaches the image's own sshd: one a test starts itself, e.g. from a chisel rootfs under `chroot`, still fails under emulation.
 
@@ -71,7 +81,7 @@ the allocate scripts also wait for a completed ssh handshake (when the host has 
 
 ## install spread
 
-prefer a precompiled spread CLI over `go install`? same release ships statically-linked binaries for linux amd64 / arm64 / s390x / ppc64le:
+prefer a precompiled spread CLI over `go install`? same release ships statically-linked binaries for linux amd64 / arm64 / s390x / ppc64le / riscv64 / armhf:
 
 ```
 curl -fsSL https://github.com/lczyk/spread-bread/releases/latest/download/spread-linux-amd64 -o /usr/local/bin/spread
@@ -176,7 +186,7 @@ the outer spreads a `bread-test` container; that container runs an inner spread 
 
 `release.yaml` triggers on push of an `r[0-9]+` tag. on success it:
 
-- builds the binary cache + all images -- amd64 / arm64 on per-arch native runners, s390x / ppc64le under qemu.
+- builds the binary cache + all images -- amd64 / arm64 on per-arch native runners, the rest under qemu.
 - pushes 8 multiarch manifests to `ghcr.io/lczyk/spread-bread/{bread,bread-chisel-releases}:<ver>`.
 - attaches `inlined/*.yaml` to a rolling github release called `yamls`. older `r*` releases are deleted (release objects only; the underlying tags stay).
 

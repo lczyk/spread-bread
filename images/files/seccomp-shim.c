@@ -4,7 +4,7 @@
  *
  * Preloaded into the image's sshd via LD_PRELOAD in the Dockerfile CMD;
  * sshd-session and sshd-auth inherit it. openssh 10.4+ aborts the pre-auth
- * child when prctl(PR_SET_SECCOMP) fails, and qemu-user (s390x, ppc64le) and
+ * child when prctl(PR_SET_SECCOMP) fails, and qemu-user (every non-native arch) and
  * Docker Desktop's Rosetta (amd64 on Apple Silicon) refuse that call with
  * EINVAL. Reporting success for that one failure lets sshd carry on
  * unsandboxed, as openssh did before 10.4. Natively the call succeeds and the

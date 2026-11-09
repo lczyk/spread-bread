@@ -4,6 +4,10 @@ ver=$(echo "$SPREAD_SYSTEM" | cut -d- -f2)   # e.g., ubuntu-24.04-amd64 -> 24.04
 arch=$(echo "$SPREAD_SYSTEM" | cut -d- -f3)  # e.g., ubuntu-24.04-amd64 -> amd64
 echo "ver: $ver"
 echo "arch: $arch"
+case "$arch" in
+    armhf) platform=linux/arm/v7 ;;  # docker's name for it
+    *)     platform="linux/$arch" ;;
+esac
 
 image="ghcr.io/lczyk/spread-bread/bread-chisel-releases:$ver"
 echo "image: $image"
@@ -52,7 +56,7 @@ echo "container_name: $container_name"
 
 docker run \
     --rm \
-    --platform "linux/$arch" \
+    --platform "$platform" \
     --privileged \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -e DEBIAN_FRONTEND=noninteractive \
@@ -73,7 +77,7 @@ for ((i = 0; i < 60; i++)); do
         break
     fi
     if ! docker inspect "$container_name" --format '{{.State.Status}}' 2>/dev/null | grep -qx running; then
-        echo "$container_name is not running; reproduce with: docker run --rm --platform linux/$arch $image" >&2
+        echo "$container_name is not running; reproduce with: docker run --rm --platform $platform $image" >&2
         docker logs "$container_name" >&2 2>&1 || true
         exit 1
     fi

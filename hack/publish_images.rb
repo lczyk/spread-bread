@@ -17,6 +17,7 @@
 require "digest"
 require "json"
 require "open3"
+require_relative "build_config"
 require_relative "config_digest"
 
 def run(*cmd)
@@ -36,13 +37,23 @@ def skopeo_raw(ref, *flags)
   abort "publish_images: skopeo inspect #{ref} failed: #{err}"
 end
 
+# Our arch name -> [docker architecture, variant or nil], e.g. armhf -> [arm, v7].
+def docker_platform(arch) = BuildConfig.platform(arch).split("/").values_at(1, 2)
+
+def arch_of(platform)
+  BuildConfig::ARCHES.find do |arch|
+    want, variant = docker_platform(arch)
+    platform["architecture"] == want && (variant.nil? || platform["variant"] == variant)
+  end || platform["architecture"]
+end
+
 # The arch -> config digest map a tag points at, and its manifest list digest.
 def remote(repo, tag)
   flavour, ver = tag.split(":")
   raw = skopeo_raw("#{repo}/#{flavour}:#{ver}") or return [{}, nil]
   configs = JSON.parse(raw).fetch("manifests", []).filter_map do |m|
     config = skopeo_raw("#{repo}/#{flavour}@#{m["digest"]}", "--config") or next
-    [m.dig("platform", "architecture"), ConfigDigest.of(config)]
+    [arch_of(m.fetch("platform", {})), ConfigDigest.of(config)]
   end
   [configs.to_h, "sha256:#{Digest::SHA256.hexdigest(raw)}"]
 end
@@ -77,7 +88,8 @@ def push(dir, repo, plan_file)
     digest_file = File.join(dir, "#{flavour}-#{ver}.digest")
     run("buildah", "manifest", "create", list)
     arches.each do |arch|
-      run("buildah", "manifest", "add", "--arch", arch, list,
+      name, variant = docker_platform(arch)
+      run("buildah", "manifest", "add", "--arch", name, *(variant ? ["--variant", variant] : []), list,
           "docker-archive:#{File.join(dir, "images-#{arch}", "#{flavour}-#{ver}-#{arch}.tar")}")
     end
     run("buildah", "manifest", "push", "--format", "oci", "--all", "--digestfile", digest_file,

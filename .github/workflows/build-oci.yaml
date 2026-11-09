@@ -6,8 +6,8 @@ name: Build OCI image tarballs
 # image-digests-<arch>, so the publish step can tell what changed before
 # downloading any tarball.
 #
-# amd64 / arm64 build on native runners; s390x / ppc64le have no hosted
-# runners and build under qemu on amd64 (slow; published after only a login
+# amd64 / arm64 build on native runners; the rest have no hosted runners
+# and build under qemu on amd64 (slow; published after only a login
 # check).
 #
 # bread-test is intentionally not built here (test-infra-only).
@@ -83,11 +83,12 @@ jobs:
             docker logs "$cid" 2>&1 || true
             exit 1
           }
+          platform=$(hack/build_config.rb --platform ${{ matrix.arch }})
           for flavour in bread bread-chisel-releases; do
             for ver in 22.04 24.04 25.10 26.04 26.10; do
               tag="$flavour:$ver-${{ matrix.arch }}"
               echo "==> logging into $tag"
-              cid=$(docker run -d --platform "linux/${{ matrix.arch }}" -p 127.0.0.1::22 "$tag")
+              cid=$(docker run -d --platform "$platform" -p 127.0.0.1::22 "$tag")
               port=$(docker port "$cid" 22 | head -n1 | cut -d: -f2)
               [ -n "$port" ] || fail "$tag has no published sshd port"
               ok=""
