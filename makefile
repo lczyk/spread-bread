@@ -23,7 +23,7 @@ SELECTED_VER_ARCH := $(foreach v,$(SELECTED_VERS),$(foreach a,$(SELECTED_ARCHES)
 
 # Host-arch detection (uname -m -> docker arch name). SELECTED_ARCH defaults to
 # the host arch but honours an explicit ARCH=... override.
-HOST_ARCH   := $(shell uname -m | sed -e 's/^x86_64$$/amd64/' -e 's/^aarch64$$/arm64/')
+HOST_ARCH   := $(shell uname -m | sed -e 's/^x86_64$$/amd64/' -e 's/^aarch64$$/arm64/' -e 's/^armv7l$$/armhf/')
 SELECTED_ARCH := $(if $(strip $(ARCH)),$(ARCH),$(HOST_ARCH))
 
 # Full (non-narrowed) matrix used by `clean` so it nukes everything.
@@ -152,7 +152,7 @@ inlined/%.yaml: templates/%.yaml.in hack/inline_scripts.rb $(SCRIPTS)
 .PHONY: shell
 shell: .stamp/bread-26.04-$(SELECTED_ARCH)  ## Drop into a bread:26.04 shell (host arch). Override via ARCH=...
 	$(DOCKER) run --rm -it \
-		--platform "linux/$(SELECTED_ARCH)" \
+		--platform "$(PLATFORM_$(SELECTED_ARCH))" \
 		bread:26.04-$(SELECTED_ARCH) bash
 
 .PHONY: nuke-spread

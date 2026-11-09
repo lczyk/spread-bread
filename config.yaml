@@ -7,12 +7,13 @@ pins:
   SPREAD_REF: "2026.07.12"
   GO_BUILDER_IMAGE: ubuntu/go:1.25-26.04_edge
   # Docker CLI built from source: apt's docker.io crashes under qemu, and
-  # docker.com's static tarballs don't cover s390x / ppc64le.
+  # docker.com's static tarballs don't cover the non-native arches.
   DOCKER_VERSION: 29.8.0
 
 versions: ["22.04", "24.04", "25.10", "26.04", "26.10"]
 
-# Non-native arches build under qemu and publish untested.
+# Non-native arches build under qemu and publish untested. platform is the
+# docker platform, where it isn't linux/<arch>.
 arches:
   amd64:
   arm64:
@@ -20,6 +21,11 @@ arches:
     native: false
   ppc64le:
     native: false
+  riscv64:
+    native: false
+  armhf:
+    native: false
+    platform: linux/arm/v7
 
 # Published to ghcr (bread-test is test infra only).
 flavours:

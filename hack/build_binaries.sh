@@ -18,7 +18,7 @@ cd "$(dirname "$0")/.."
 : "${SPREAD_REF:?required}"
 : "${GO_BUILDER_IMAGE:?required}"
 : "${DOCKER_VERSION:?required}"
-TARGET_ARCHES="${TARGET_ARCHES:-amd64 arm64 s390x ppc64le}"
+TARGET_ARCHES="${TARGET_ARCHES:-amd64 arm64 s390x ppc64le riscv64 armhf}"
 
 mkdir -p cache/binaries
 
@@ -51,6 +51,14 @@ fi
 export GOTOOLCHAIN=auto
 go version
 
+# Go names armhf arm, and needs the ARM version spelled out.
+goarch() {
+    case "$1" in
+        armhf) echo "GOARCH=arm GOARM=7" ;;
+        *)     echo "GOARCH=$1" ;;
+    esac
+}
+
 # Ensure git is available (the ubuntu/go image may not ship it).
 if ! command -v git >/dev/null; then
     # Docker Desktop mounts the host bundle over this path read-only, which
@@ -69,7 +77,7 @@ build() {
     git checkout "$ref"
     for arch in $TARGET_ARCHES; do
         echo "==> building $name for $arch"
-        CGO_ENABLED=0 GOOS=linux GOARCH="$arch" \
+        env CGO_ENABLED=0 GOOS=linux $(goarch "$arch") \
             go build -trimpath -ldflags "-s -w $extra_ldflags" \
             -o "/out/$name-$arch" "$pkg"
     done
@@ -102,7 +110,7 @@ CHISEL_HACKED_VERSION_STRING="${CHISEL_VERSION_STRING}-hacked"
 echo "==> chisel-hacked version string: $CHISEL_HACKED_VERSION_STRING"
 for arch in $TARGET_ARCHES; do
     echo "==> building chisel-hacked for $arch"
-    CGO_ENABLED=0 GOOS=linux GOARCH="$arch" \
+    env CGO_ENABLED=0 GOOS=linux $(goarch "$arch") \
         go build -trimpath -ldflags "-s -w -X github.com/canonical/chisel/cmd.Version=$CHISEL_HACKED_VERSION_STRING" \
         -o "/out/chisel-hacked-$arch" ./cmd/chisel
 done
@@ -112,7 +120,7 @@ build spread https://github.com/canonical/spread  "$SPREAD_REF" ./cmd/spread
 
 # Build the docker CLI from source for each target arch. docker.com'\''s
 # static tarballs only cover x86_64 / aarch64 at current versions (s390x /
-# ppc64le stopped at 18.06), and Ubuntu apt'\''s docker.io is built with go
+# ppc64le stopped at 18.06, riscv64 never had one), and Ubuntu apt'\''s docker.io is built with go
 # 1.24 and crashes under qemu emulation -- building from source with the
 # go 1.25 toolchain covers all arches uniformly. docker/cli has no go.mod
 # (vendor.mod + vendor/ instead); the symlink trick puts it in module mode.
@@ -123,7 +131,7 @@ ln -s vendor.mod go.mod
 ln -s vendor.sum go.sum
 for arch in $TARGET_ARCHES; do
     echo "==> building docker cli for $arch"
-    CGO_ENABLED=0 GOOS=linux GOARCH="$arch" \
+    env CGO_ENABLED=0 GOOS=linux $(goarch "$arch") \
         go build -mod=vendor -trimpath \
         -ldflags "-s -w -X github.com/docker/cli/cli/version.Version=$DOCKER_VERSION" \
         -o "/out/docker-$arch" ./cmd/docker

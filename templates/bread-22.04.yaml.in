@@ -31,6 +31,12 @@ backends:
       - ubuntu-22.04-ppc64le:
           password: bread
           workers: 2
+      - ubuntu-22.04-riscv64:
+          password: bread
+          workers: 2
+      - ubuntu-22.04-armhf:
+          password: bread
+          workers: 2
 
 suites:
   tests/:

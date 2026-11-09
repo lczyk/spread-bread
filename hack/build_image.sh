@@ -13,6 +13,7 @@ arch="${name##*-}"
 rest="${name%-*}"
 ver="${rest##*-}"
 flavour="${rest%-*}"
+platform=$(hack/build_config.rb --platform "$arch")
 
 stamp=".stamp/$name"
 
@@ -32,7 +33,7 @@ case "$flavour" in
             --tag "bread:$ver-$arch" \
             --build-arg "APT_MIRROR=${APT_MIRROR:-}" \
             --file "images/Dockerfile.bread-$ver" \
-            --platform "linux/$arch" \
+            --platform "$platform" \
             .
         ;;
     bread-chisel-releases)
@@ -42,7 +43,7 @@ case "$flavour" in
             --build-arg "APT_MIRROR=${APT_MIRROR:-}" \
             --build-arg "BUILD_ARCH=$arch" \
             --file "images/Dockerfile.bread-chisel-releases-$ver" \
-            --platform "linux/$arch" \
+            --platform "$platform" \
             .
         ;;
     bread-test)
@@ -51,7 +52,7 @@ case "$flavour" in
             --build-arg "BASE_TAG=$ver-$arch" \
             --build-arg "BUILD_ARCH=$arch" \
             --file "tests/Dockerfile.bread-test-$ver" \
-            --platform "linux/$arch" \
+            --platform "$platform" \
             .
         ;;
     *)

@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64, arm64, s390x, ppc64le]
+        arch: [amd64, arm64, s390x, ppc64le, riscv64, armhf]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 

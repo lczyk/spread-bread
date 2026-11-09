@@ -32,4 +32,6 @@ jobs:
       matrix: >-
         [${{ inputs.native-images && '{"runner": "ubuntu-24.04", "arch": "amd64"}, {"runner": "ubuntu-24.04-arm", "arch": "arm64"},' || '' }}
          {"runner": "ubuntu-24.04", "arch": "s390x",   "qemu": true},
-         {"runner": "ubuntu-24.04", "arch": "ppc64le", "qemu": true}]
+         {"runner": "ubuntu-24.04", "arch": "ppc64le", "qemu": true},
+         {"runner": "ubuntu-24.04", "arch": "riscv64", "qemu": true},
+         {"runner": "ubuntu-24.04", "arch": "armhf",   "qemu": true}]

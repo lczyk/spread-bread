@@ -17,6 +17,7 @@ execute: |
   case "$(uname -m)" in
       x86_64)  actual_arch=amd64 ;;
       aarch64) actual_arch=arm64 ;;
+      armv7l)  actual_arch=armhf ;;
       *)       actual_arch=$(uname -m) ;;
   esac
   if [ "$expected_arch" != "$actual_arch" ]; then
