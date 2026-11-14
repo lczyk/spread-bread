@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: read
+  actions: read  # build-oci.yaml reuses images built by another run
 
 jobs:
   binaries:
@@ -31,7 +32,7 @@ jobs:
     with:
       matrix: >-
         [${{ inputs.native-images && '{"runner": "ubuntu-24.04", "arch": "amd64"}, {"runner": "ubuntu-24.04-arm", "arch": "arm64"},' || '' }}
-         {"runner": "ubuntu-24.04", "arch": "s390x",   "qemu": true},
-         {"runner": "ubuntu-24.04", "arch": "ppc64le", "qemu": true},
-         {"runner": "ubuntu-24.04", "arch": "riscv64", "qemu": true},
-         {"runner": "ubuntu-24.04", "arch": "armhf",   "qemu": true}]
+         {"runner": "ubuntu-24.04",     "arch": "s390x",   "qemu": true, "login": true},
+         {"runner": "ubuntu-24.04",     "arch": "ppc64le", "qemu": true, "login": true},
+         {"runner": "ubuntu-24.04",     "arch": "riscv64", "qemu": true, "login": true},
+         {"runner": "ubuntu-24.04-arm", "arch": "armhf",   "login": true}]
