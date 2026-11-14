@@ -4,10 +4,11 @@ run-name: Release ${{ github.event.head_commit.message || github.ref_name }}
 # Build + test + publish whenever REVISION changes on main: the bot's
 # "release: r<N>" commit after a PR merge (bump-revision.yaml), or a bump
 # pushed by hand. The r<N> tag is pushed onto that commit at publish time,
-# before the release object is created: a release created against a bare
-# target_commitish makes GitHub diff it with main, and if main has moved
-# on by a workflow-file change in the meantime the API demands a
-# `workflows` scope GITHUB_TOKEN cannot hold (cli/cli#9514).
+# before the release object is created. Either way GitHub diffs the commit
+# with main, and if main has moved on by a workflow-file change in the
+# meantime it demands a `workflows` permission GITHUB_TOKEN cannot hold
+# (cli/cli#9514). So the tag is pushed as the bot, whose PAT carries the
+# `workflow` scope, and the release is then created on the existing tag.
 # Rolling: only the latest GitHub release survives -- it is always named
 # "downloads" and carries the inlined/*.yaml distribution artefacts +
 # precompiled spread binaries (with sha256 sidecars and cosign keyless
@@ -81,8 +82,11 @@ jobs:
       id-token: write
 
     steps:
+      # The token only matters to the tag push below.
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ secrets.BOT_PAT }}
 
       - name: Regenerate inlined yamls
         run: make inline
