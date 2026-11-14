@@ -6,16 +6,18 @@ name: Build OCI image tarballs
 # image-digests-<arch>, so the publish step can tell what changed before
 # downloading any tarball.
 #
-# amd64 / arm64 build on native runners; the rest have no hosted runners
-# and build under qemu on amd64 (slow; published after only a login
-# check).
+# amd64 / arm64 build on native runners. armhf builds on the arm64 runner,
+# whose cpu runs armv7 userland natively. The rest have no hosted runners
+# and build under qemu on amd64 (slow). Neither kind gets the test suite;
+# they are published after only a login check.
 #
 # bread-test is intentionally not built here (test-infra-only).
 
 on:
   workflow_call:
     inputs:
-      # JSON matrix-include list of {runner, arch, qemu?}; build.yaml owns it.
+      # JSON matrix-include list of {runner, arch, qemu?, login?}; build.yaml
+      # owns it.
       matrix:
         type: string
         required: true
@@ -69,13 +71,13 @@ jobs:
 
       # A cache hit skips the bake, so the daemon has nothing to run yet.
       - name: Load cached ${{ matrix.arch }} images
-        if: matrix.qemu && steps.images-cache.outputs.cache-hit == 'true'
+        if: matrix.login && steps.images-cache.outputs.cache-hit == 'true'
         run: for f in images-out/*.tar; do docker load -i "$f"; done
 
-      # Emulated images get no test suite, so at least log into each one the
+      # These images get no test suite, so at least log into each one the
       # way spread does. A running sshd is not enough; see images/files/seccomp-shim.c.
       - name: Log into every ${{ matrix.arch }} image
-        if: matrix.qemu
+        if: matrix.login
         run: |
           set -e
           fail() {
@@ -83,6 +85,7 @@ jobs:
             docker logs "$cid" 2>&1 || true
             exit 1
           }
+          command -v sshpass >/dev/null || sudo apt-get install -y sshpass
           platform=$(hack/build_config.rb --platform ${{ matrix.arch }})
           for flavour in bread bread-chisel-releases; do
             for ver in 22.04 24.04 25.10 26.04 26.10; do
