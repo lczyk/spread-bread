@@ -60,6 +60,9 @@ jobs:
   build:
     needs: revision
     uses: ./.github/workflows/build.yaml
+    permissions:
+      contents: read
+      actions: read
 
   push-ghcr:
     needs: build

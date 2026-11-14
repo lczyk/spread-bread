@@ -24,6 +24,7 @@ on:
 
 permissions:
   contents: read
+  actions: read  # look up + download images built by another run
 
 jobs:
   build-images:
@@ -60,18 +61,44 @@ jobs:
           path: images-out/
           key: images-${{ matrix.arch }}-${{ steps.inputs.outputs.hash }}
 
-      # Needed on a cache hit too: the login check below runs the images.
+      # A cache saved by a PR is out of reach of main, so the release after a
+      # merge would rebuild what the PR's ci just built. Every build leaves a
+      # prebuilt-<arch>-<hash> marker artefact next to its tarballs; find one
+      # for these inputs and take that run's tarballs instead. Only runs of
+      # this repo count: a fork's PR can upload anything under any name.
+      - name: Fetch ${{ matrix.arch }} images built by another run
+        id: images-reuse
+        if: steps.images-cache.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MARKER: prebuilt-${{ matrix.arch }}-${{ steps.inputs.outputs.hash }}
+          REPO_ID: ${{ github.repository_id }}
+        run: |
+          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$MARKER&per_page=100" --jq \
+            "[.artifacts[] | select(.expired | not) | select(.workflow_run.head_repository_id == $REPO_ID)][0].workflow_run.id // empty") || run_id=""
+          if [ -z "$run_id" ]; then
+            echo "no run has built $MARKER"
+            exit 0
+          fi
+          echo "taking images-${{ matrix.arch }} from run $run_id"
+          if gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "images-${{ matrix.arch }}" --dir images-out; then
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+          else
+            rm -rf images-out
+          fi
+
+      # Needed without a build too: the login check below runs the images.
       - name: Set up qemu (emulated arches only)
         if: matrix.qemu
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
       - name: Build + save ${{ matrix.arch }} images
-        if: steps.images-cache.outputs.cache-hit != 'true'
+        if: steps.images-cache.outputs.cache-hit != 'true' && steps.images-reuse.outputs.hit != 'true'
         run: hack/build_images.rb ${{ matrix.arch }} images-out
 
-      # A cache hit skips the bake, so the daemon has nothing to run yet.
-      - name: Load cached ${{ matrix.arch }} images
-        if: matrix.login && steps.images-cache.outputs.cache-hit == 'true'
+      # Without a build the daemon has nothing to run yet.
+      - name: Load prebuilt ${{ matrix.arch }} images
+        if: matrix.login && (steps.images-cache.outputs.cache-hit == 'true' || steps.images-reuse.outputs.hit == 'true')
         run: for f in images-out/*.tar; do docker load -i "$f"; done
 
       # These images get no test suite, so at least log into each one the
@@ -118,4 +145,11 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: image-digests-${{ matrix.arch }}
+          path: images-out/digests.json
+
+      # Last, so a marker always has its tarballs. See the fetch step above.
+      - name: Upload ${{ matrix.arch }} prebuilt marker
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: prebuilt-${{ matrix.arch }}-${{ steps.inputs.outputs.hash }}
           path: images-out/digests.json
