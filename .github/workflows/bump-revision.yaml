@@ -6,7 +6,8 @@ name: Bump revision
 # when the artefacts do. A merge done on GitHub is committed by web-flow;
 # local pushes (and the bot's own bumps) are not, so they don't bump. Pushes
 # as the bot (BOT_PAT) because GITHUB_TOKEN pushes don't trigger workflows;
-# the bot needs a main ruleset bypass (required ci-ok check, signed commits).
+# the bot needs a main ruleset bypass (required ci-ok check). Commits are
+# signed with the bot's ssh signing key (see base-refresh.yaml).
 
 on:
   push:
@@ -36,6 +37,7 @@ jobs:
       - name: Bump REVISION and push
         env:
           MERGED_SHA: ${{ github.sha }}
+          BOT_SIGNING_KEY: ${{ secrets.BOT_SIGNING_KEY }}
         run: |
           set -euo pipefail
           # A bump that landed after this merge already releases it.
@@ -50,6 +52,11 @@ jobs:
 
           git config user.name  "lczyk-bot"
           git config user.email "lczyk-bot@users.noreply.github.com"
+          install -m 600 /dev/null "$RUNNER_TEMP/signing"
+          printf '%s\n' "$BOT_SIGNING_KEY" > "$RUNNER_TEMP/signing"
+          git config gpg.format ssh
+          git config user.signingkey "$RUNNER_TEMP/signing"
+          git config commit.gpgsign true
           hack/bump_revision.rb
           # Fails rather than double-bumping if main moved since checkout.
           git push origin HEAD:main

@@ -47,6 +47,7 @@ jobs:
       - name: Open / update PR on drift
         env:
           GH_TOKEN: ${{ secrets.BOT_PAT }}
+          BOT_SIGNING_KEY: ${{ secrets.BOT_SIGNING_KEY }}
         run: |
           set -e
           if git diff --quiet -- images/; then
@@ -56,6 +57,13 @@ jobs:
 
           git config user.name  "lczyk-bot"
           git config user.email "lczyk-bot@users.noreply.github.com"
+          # main requires verified signatures; the key is registered on the
+          # bot account as an ssh signing key.
+          install -m 600 /dev/null "$RUNNER_TEMP/signing"
+          printf '%s\n' "$BOT_SIGNING_KEY" > "$RUNNER_TEMP/signing"
+          git config gpg.format ssh
+          git config user.signingkey "$RUNNER_TEMP/signing"
+          git config commit.gpgsign true
 
           branch=base-refresh
           git switch -C "$branch"
