@@ -1,6 +1,6 @@
 # Bread image: Ubuntu 22.04 + sshd only.
 
-FROM docker.io/library/ubuntu:22.04@sha256:74b12b11ffa550fba1929ad4d8d16533c34f6612728469671afba1b03b66881c
+FROM docker.io/library/ubuntu:22.04@sha256:f64b2ffc2f10ab8f8505aa56b2664bd846cbb9df87c7e2532e30f7667021c0e6
 
 ARG APT_MIRROR=
 
