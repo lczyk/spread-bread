@@ -34,7 +34,8 @@ jobs:
   # Guard: inlined/*.yaml is generated from templates/ + scripts/ and also
   # committed (repo-tree consumers grab it directly). Regenerate and fail on
   # drift so a template or script edit can't land without its matching
-  # inlined refresh. Ubuntu runners ship ruby, so no extra setup.
+  # inlined refresh. The full ubuntu runners ship ruby, so no extra setup.
+  # ubuntu-slim has none.
   check-inlined:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -54,7 +55,8 @@ jobs:
   # Direct pushes to main don't get that bump, so they must bump REVISION
   # themselves whenever they change release inputs.
   check-revision:
-    runs-on: ubuntu-24.04
+    # The push path runs ruby.
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-slim' || 'ubuntu-24.04' }}
     timeout-minutes: 5
     permissions:
       contents: read
@@ -97,7 +99,7 @@ jobs:
   ci-ok:
     if: always()
     needs: [build, check-inlined, check-revision]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-slim
     steps:
       - name: Assert every job succeeded
         env:

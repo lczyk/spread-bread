@@ -30,7 +30,8 @@ permissions:
 
 jobs:
   refresh:
-    runs-on: ubuntu-24.04
+    # The digest lookup talks to the registry and needs no docker daemon.
+    runs-on: ubuntu-slim
     timeout-minutes: 15
 
     steps:
