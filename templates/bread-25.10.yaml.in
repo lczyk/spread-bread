@@ -38,6 +38,17 @@ backends:
           password: bread
           workers: 2
 
+  # Opt-in (`spread lxd:`): the same image as an LXD container. Host arch only.
+  lxd:
+    type: adhoc
+    manual: true
+    allocate: source scripts/spread_allocate_bread-lxd.sh
+    discard: source scripts/spread_discard_bread-lxd.sh
+    systems:
+      - ubuntu-25.10:
+          password: bread
+          workers: 2
+
 suites:
   tests/:
     summary: Replace with your own suites

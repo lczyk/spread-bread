@@ -32,6 +32,7 @@ case "$flavour" in
         docker build \
             --tag "bread:$ver-$arch" \
             --build-arg "APT_MIRROR=${APT_MIRROR:-}" \
+            --build-arg "BUILD_ARCH=$arch" \
             --file "images/Dockerfile.bread-$ver" \
             --platform "$platform" \
             .

@@ -45,6 +45,17 @@ backends:
           password: bread
           workers: 4
 
+  # Opt-in (`spread lxd:`): the same image as an LXD container. Host arch only.
+  lxd:
+    type: adhoc
+    manual: true
+    allocate: source scripts/spread_allocate_bread-chisel-releases-lxd.sh
+    discard: source scripts/spread_discard_bread-chisel-releases-lxd.sh
+    systems:
+      - ubuntu-25.10:
+          password: bread
+          workers: 4
+
 suites:
   tests/spread/integration/:
     summary: Tests common scenarios

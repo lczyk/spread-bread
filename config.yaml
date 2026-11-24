@@ -1,7 +1,8 @@
 # Pins and the build matrix, read by hack/build_config.rb. A release input:
 # changing anything here cuts a new release.
 
-# Go binaries baked into bread-chisel-releases + bread-test.
+# Go binaries baked into the images: peel into bread, chisel + docker into
+# bread-chisel-releases, spread into bread-test.
 pins:
   CHISEL_REF: v1.5.1
   SPREAD_REF: "2026.07.12"
@@ -9,6 +10,8 @@ pins:
   # Docker CLI built from source: apt's docker.io crashes under qemu, and
   # docker.com's static tarballs don't cover the non-native arches.
   DOCKER_VERSION: 29.8.0
+  # Init for running the bread images as LXD containers (see hack/pack_lxd.sh).
+  PEEL_REF: v0.1.2
 
 versions: ["22.04", "24.04", "25.10", "26.04", "26.10"]
 

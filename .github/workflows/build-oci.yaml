@@ -11,13 +11,16 @@ name: Build OCI image tarballs
 # and build under qemu on amd64 (slow). Neither kind gets the test suite;
 # they are published after only a login check.
 #
+# Lanes flagged lxd (native ones, release only) also pack every image as an
+# LXD image (hack/pack_lxd.sh) and upload those as lxd-<arch>.
+#
 # bread-test is intentionally not built here (test-infra-only).
 
 on:
   workflow_call:
     inputs:
-      # JSON matrix-include list of {runner, arch, qemu?, login?}; build.yaml
-      # owns it.
+      # JSON matrix-include list of {runner, arch, qemu?, login?, lxd?};
+      # build.yaml owns it.
       matrix:
         type: string
         required: true
@@ -98,7 +101,7 @@ jobs:
 
       # Without a build the daemon has nothing to run yet.
       - name: Load prebuilt ${{ matrix.arch }} images
-        if: matrix.login && (steps.images-cache.outputs.cache-hit == 'true' || steps.images-reuse.outputs.hit == 'true')
+        if: (matrix.login || matrix.lxd) && (steps.images-cache.outputs.cache-hit == 'true' || steps.images-reuse.outputs.hit == 'true')
         run: for f in images-out/*.tar; do docker load -i "$f"; done
 
       # These images get no test suite, so at least log into each one the
@@ -134,6 +137,25 @@ jobs:
               docker rm -f "$cid" >/dev/null
             done
           done
+
+      - name: Pack ${{ matrix.arch }} images for LXD
+        if: matrix.lxd
+        run: |
+          set -e
+          for flavour in bread bread-chisel-releases; do
+            for ver in 22.04 24.04 25.10 26.04 26.10; do
+              hack/pack_lxd.sh "$flavour-$ver-${{ matrix.arch }}" lxd-out
+            done
+          done
+
+      - name: Upload ${{ matrix.arch }} LXD images
+        if: matrix.lxd
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lxd-${{ matrix.arch }}
+          path: lxd-out/
+          # zstd already
+          compression-level: 0
 
       - name: Upload ${{ matrix.arch }} image tarballs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

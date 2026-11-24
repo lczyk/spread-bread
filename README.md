@@ -22,7 +22,7 @@ prebuilt docker images + ready-to-use spread yamls so you can drop Canonical [`s
 
 two image flavours, each for ubuntu 22.04, 24.04, 25.10, 26.04, 26.10 x amd64 / arm64 / s390x / ppc64le / riscv64 / armhf, published as multiarch tags at `ghcr.io/lczyk/spread-bread/<flavour>:<ver>`. heads-up: s390x, ppc64le, riscv64 and armhf images build under qemu and ship with only a login check (no native runners); amd64 + arm64 are tested on every release:
 
-- **`bread`** -- base: ubuntu + sshd. general-purpose spread system; the test suite installs whatever else it needs.
+- **`bread`** -- base: ubuntu + sshd. general-purpose spread system; the test suite installs whatever else it needs. also ships [peel](https://github.com/canonical/peel) as `/sbin/init`, so the same image boots under LXD (see [lxd](#lxd-opt-in)); docker never runs it.
 - **`bread-chisel-releases`** -- bread + `chisel` + the shell + container tooling typically needed by [chisel-releases](https://github.com/canonical/chisel-releases) spread tests (curl, wget, git, jq, file, sudo, tree, docker, skopeo). `chisel` and `docker` are built from source (canonical/chisel + docker/cli pinned by version tag) so the bundled binaries are go 1.25+ and survive qemu emulation.
 
 ## using (the common case)
@@ -79,6 +79,21 @@ the 26.10 images work around it: sshd runs with a preloaded shim that reports su
 
 the allocate scripts also wait for a completed ssh handshake (when the host has `ssh-keyscan`) and fail with sshd's log if none comes, so a failure of this kind shows up at allocation rather than as a bare `EOF` from spread.
 
+### lxd (opt-in)
+
+every yaml also has an `lxd` backend that runs the same image as an LXD container instead. it is `manual`, so a bare `spread` keeps running the docker systems only; select it explicitly:
+
+```
+spread lxd:
+spread lxd:ubuntu-26.04:tests/spread/integration/bash
+```
+
+LXD only runs the host's arch, so the system is just `ubuntu-<ver>`, on an amd64 or arm64 host. no `--privileged`, no docker socket.
+
+the images are release assets next to the yamls: each is an LXD split image (`<flavour>-<ver>-<arch>.lxd-meta.tar.gz` + `.lxd-rootfs.tar.zst`) packed from the docker image by `hack/pack_lxd.sh`, plus its `.lxd-fingerprint`. allocate imports the image once per release (workers wait on a lock) and launches it by fingerprint; it drops the copies older releases left behind. `BREAD_LXD_URL` fetches them from elsewhere instead, e.g. a directory of `hack/pack_lxd.sh` output served over http.
+
+peel is the container's init: it brings up `eth0` over DHCP, writes `resolv.conf` and runs the image's `CMD` (sshd), as recorded in `/peel/state.json` at pack time. it never pulls anything: state.json marks the image as already unpacked.
+
 ## install spread
 
 prefer a precompiled spread CLI over `go install`? same release ships statically-linked binaries for linux amd64 / arm64 / s390x / ppc64le / riscv64 / armhf:
@@ -113,7 +128,7 @@ spread-bread/
   makefile                       # build images + generate inlined yamls + run contract tests
   config.yaml                    # version pins + build matrix (versions, arches, published flavours)
   hack/
-    build_binaries.sh            # cross-compile chisel + spread + docker cli in an ubuntu/go builder (per arch in ci)
+    build_binaries.sh            # cross-compile chisel + spread + docker cli + peel in an ubuntu/go builder (per arch in ci)
     build_image.sh               # per-image build w/ hash-stamp short-circuit
     build_images.rb              # build + save every published image for one arch, with config digests (ci)
     publish_images.rb            # push to ghcr only the tags whose images changed, then sign (ci)
@@ -123,7 +138,8 @@ spread-bread/
     bump_revision.rb             # bump REVISION + commit "release: r<N>"
     check_base.sh                # detect upstream ubuntu base digest drift; rewrite @sha256 pins
     inline_scripts.rb            # splice scripts/*.sh into yaml templates
-  scripts/                       # allocate / discard scripts, one pair per flavour
+    pack_lxd.sh                  # pack a built image as an LXD split image (release assets for the lxd backend)
+  scripts/                       # allocate / discard scripts, one pair per flavour and backend
   images/                        # one Dockerfile per (flavour, ubuntu version)
     files/                       # copied / bind-mounted into the images by the Dockerfiles
       tar-shim.sh                # image /bin/tar; routes extraction to bsdtar where gnu tar is broken
@@ -131,7 +147,7 @@ spread-bread/
       apt-mirror.sh              # build-time apt mirror override, bind-mounted into image builds by ci
   templates/                     # yaml templates with `source scripts/...` markers
   inlined/                       # generated self-contained spread yamls (release artefacts)
-  cache/binaries/                # gitignored; cross-compiled chisel / spread / docker per arch
+  cache/binaries/                # gitignored; cross-compiled chisel / spread / docker / peel per arch
   demo/                          # worked example with local builds + a small test suite
     spread.yaml                  # hand-maintained inlined yaml, LTS-only (24.04 + 26.04, both arches)
     makefile
@@ -142,6 +158,7 @@ spread-bread/
     contract-{bread,bread-chisel-releases}/run/task.yaml
     _inner-{bread,bread-chisel-releases}/contract/task.yaml
     lib/clean-rootfs             # stand-in for the chisel-releases lib the inlined yamls' restore-each calls
+    run_lxd.sh                   # the same contract on the yamls' lxd backend (make test-lxd)
   .github/workflows/             # ci (build + test) on PR / push to main; revision bump + release on PR merges that change release inputs; daily base-refresh
 ```
 
@@ -182,13 +199,21 @@ cd tests && spread
 
 the outer spreads a `bread-test` container; that container runs an inner spread against each inlined yaml; the inner asserts the contract (ubuntu version + arch match the system name, plus `chisel --version` + tool presence for the chisel flavour).
 
+run the same contract on the lxd backend (host arch; needs lxd):
+
+```
+make test-lxd
+```
+
+it packs the host arch's images with `hack/pack_lxd.sh`, serves them over http the way the release does (`BREAD_LXD_URL`), and runs the inner contract tasks with `spread lxd:`.
+
 ## publishing
 
 `release.yaml` triggers on push of an `r[0-9]+` tag. on success it:
 
 - builds the binary cache + all images -- amd64 / arm64 on per-arch native runners, the rest under qemu.
 - pushes 8 multiarch manifests to `ghcr.io/lczyk/spread-bread/{bread,bread-chisel-releases}:<ver>`.
-- attaches `inlined/*.yaml` to a rolling github release called `yamls`. older `r*` releases are deleted (release objects only; the underlying tags stay).
+- attaches `inlined/*.yaml`, plus the LXD images of the native arches, to a rolling github release called `yamls`. older `r*` releases are deleted (release objects only; the underlying tags stay).
 
 ci (`ci.yaml`) is build + test on every PR + push to main; no publish.
 

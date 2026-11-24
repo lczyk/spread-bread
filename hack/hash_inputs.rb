@@ -35,8 +35,14 @@ def stamp_line(name, digest) = "#{sha256("#{digest}\n")}  .stamp/#{name}\n"
 
 def binaries(arch)
   files = [BINARIES_SCRIPT, *Dir["patches/chisel/*.patch"].sort]
-  pins = %w[CHISEL_REF SPREAD_REF GO_BUILDER_IMAGE DOCKER_VERSION].map { |v| "#{v}=#{BuildConfig.pin(v)}\n" }
+  pins = %w[CHISEL_REF SPREAD_REF GO_BUILDER_IMAGE DOCKER_VERSION PEEL_REF].map { |v| "#{v}=#{BuildConfig.pin(v)}\n" }
   sha256(files.map { |f| file_line(f) }.join + "ARCH=#{arch}\n" + pins.join)
+end
+
+# The slice of the binaries bread copies in: peel, and what it's built with.
+def peel(arch)
+  pins = %w[PEEL_REF GO_BUILDER_IMAGE].map { |v| "#{v}=#{BuildConfig.pin(v)}\n" }
+  sha256(file_line(BINARIES_SCRIPT) + "ARCH=#{arch}\n" + pins.join)
 end
 
 # Images built FROM bread:<ver> with the go binaries copied in.
@@ -48,7 +54,7 @@ def image(flavour, ver, arch)
   lines =
     case flavour
     when "bread"
-      ["images/Dockerfile.bread-#{ver}", *BREAD_FILES].map { |f| file_line(f) }
+      ["images/Dockerfile.bread-#{ver}", *BREAD_FILES].map { |f| file_line(f) } + ["PEEL=#{peel(arch)}\n"]
     when "bread-chisel-releases"
       ["images/Dockerfile.bread-chisel-releases-#{ver}", *CHISEL_FILES].map { |f| file_line(f) } + bread_deps(ver, arch)
     when "bread-test"
@@ -71,7 +77,7 @@ end
 # Pathspecs rather than files, so `git diff` also sees deletions.
 def release
   ["images/", "templates/", "scripts/", "patches/", "config.yaml", "hack/inline_scripts.rb",
-   BINARIES_SCRIPT, *IMAGE_BUILD_SCRIPTS]
+   "hack/pack_lxd.sh", BINARIES_SCRIPT, *IMAGE_BUILD_SCRIPTS]
 end
 
 name = ARGV.fetch(0) { abort "usage: hash_inputs.rb <flavour-ver-arch>|binaries-<arch>|images-<arch>|release" }

@@ -1,4 +1,4 @@
-# Bread image: Ubuntu 26.04 + sshd only.
+# Bread image: Ubuntu 26.04 + sshd only (+ peel, to boot it under LXD).
 
 FROM docker.io/library/ubuntu:26.04@sha256:065aa8626841f16057b78b027b464cd59c4fac36c204c72dcbf48d66f5fa8a96
 
@@ -45,6 +45,11 @@ RUN chmod 0755 /usr/local/bin/bread-tar-shim && \
     dpkg-divert --local --no-rename --divert /usr/bin/tar.distrib /usr/bin/tar && \
     cp -a /usr/bin/tar /usr/bin/tar.distrib && \
     ln -sf /usr/local/bin/bread-tar-shim /usr/bin/tar
+
+# peel, the init LXD boots the image with (/sbin -> usr/sbin): DHCP on eth0,
+# then the CMD below, as hack/pack_lxd.sh records it. Docker never runs it.
+ARG BUILD_ARCH=amd64
+COPY --chmod=0755 cache/binaries/peel-${BUILD_ARCH} /usr/sbin/init
 
 EXPOSE 22
 CMD ["/usr/sbin/sshd", "-D"]

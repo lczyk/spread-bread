@@ -62,7 +62,7 @@ build-bread-chisel-releases: $(CHISEL_STAMPS)  ## Build bread-chisel-releases im
 build-bread-test: $(BREAD_TEST_STAMPS)  ## Build the bread-test (26.04 only, native arches) test-host image
 
 .PHONY: binaries
-binaries: $(addprefix .stamp/binaries-,$(SELECTED_ARCHES))  ## Cross-compile chisel + spread + docker cli (narrow via ARCH=...)
+binaries: $(addprefix .stamp/binaries-,$(SELECTED_ARCHES))  ## Cross-compile chisel + spread + docker cli + peel (narrow via ARCH=...)
 
 # Run the contract/integration spread suite (tests/spread.yaml). Builds the
 # test-host image + inlined yamls first. Pass extra spread args via SPREAD_ARGS,
@@ -76,6 +76,14 @@ TEST_STAMPS := .stamp/bread-test-26.04-$(SELECTED_ARCH) \
 .PHONY: test
 test: $(TEST_STAMPS) inline  ## Run the spread test suite (host arch; ARCH=... to override, SPREAD_ARGS=... for flags)
 	cd tests && spread $(SPREAD_ARGS) outer:ubuntu-26.04-$(SELECTED_ARCH)
+
+# LXD contract (tests/run_lxd.sh): pack the host arch's images, serve them the
+# way the release does, run the inner contract tasks on the yamls' lxd
+# backend. Needs lxd. Narrow via VER=...
+LXD_TEST_STAMPS := $(foreach v,$(SELECTED_VERS),.stamp/bread-chisel-releases-$(v)-$(HOST_ARCH))
+.PHONY: test-lxd
+test-lxd: $(LXD_TEST_STAMPS) inline  ## Run the LXD contract tests (host arch, needs lxd; narrow via VER=...)
+	tests/run_lxd.sh $(VER)
 
 .PHONY: check-base
 check-base:  ## Report upstream ubuntu base-image digest drift (non-zero exit on drift)
@@ -115,30 +123,32 @@ FULL_BREAD_STAMPS    := $(addprefix .stamp/bread-,$(FULL_VER_ARCH))
 FULL_CHISEL_STAMPS   := $(addprefix .stamp/bread-chisel-releases-,$(FULL_VER_ARCH))
 FULL_TEST_STAMPS     := $(addprefix .stamp/bread-test-26.04-,$(ARCHES))
 
-# Cross-compile chisel + spread + docker cli for one arch in a Canonical
+# Cross-compile chisel + spread + docker cli + peel for one arch in a Canonical
 # ubuntu/go:1.25-26.04_edge builder container. Stamp content = hash of inputs
 # (version pins + builder image + script + patches + arch).
-BINARIES_ENV := CHISEL_REF="$(CHISEL_REF)" SPREAD_REF="$(SPREAD_REF)" GO_BUILDER_IMAGE="$(GO_BUILDER_IMAGE)" DOCKER_VERSION="$(DOCKER_VERSION)"
+BINARIES_ENV := CHISEL_REF="$(CHISEL_REF)" SPREAD_REF="$(SPREAD_REF)" GO_BUILDER_IMAGE="$(GO_BUILDER_IMAGE)" DOCKER_VERSION="$(DOCKER_VERSION)" PEEL_REF="$(PEEL_REF)"
 
 $(FULL_BINARIES_STAMPS): .stamp/binaries-%: FORCE | .stamp
 	@set -e ; \
 		new=$$($(BINARIES_ENV) hack/hash_inputs.rb binaries-$*) ; \
 		cur=$$(cat $@ 2>/dev/null || true) ; \
 		if [ "$$new" != "$$cur" ]; then \
-			echo "==> building go binaries for $* (chisel + spread + docker)" ; \
+			echo "==> building go binaries for $* (chisel + spread + docker + peel)" ; \
 			$(BINARIES_ENV) TARGET_ARCHES="$*" hack/build_binaries.sh ; \
 			echo "$$new" > $@ ; \
 		else \
 			echo "==> go binaries for $* up-to-date (stamp matches)" ; \
 		fi
 
-$(FULL_BREAD_STAMPS): .stamp/bread-%: FORCE | .stamp
-	@hack/build_image.sh bread-$*
-
 # The arch is the last dash-separated field of a <ver>-<arch> stem.
 arch_of = $(lastword $(subst -, ,$(1)))
 
 .SECONDEXPANSION:
+# bread copies in peel from the binaries; hash_inputs.rb keys its stamp on
+# peel's inputs alone, so other pin bumps leave bread as it is.
+$(FULL_BREAD_STAMPS): .stamp/bread-%: .stamp/binaries-$$(call arch_of,$$*) FORCE | .stamp
+	@hack/build_image.sh bread-$*
+
 $(FULL_CHISEL_STAMPS): .stamp/bread-chisel-releases-%: .stamp/bread-% .stamp/binaries-$$(call arch_of,$$*) FORCE | .stamp
 	@hack/build_image.sh bread-chisel-releases-$*
 
@@ -156,10 +166,11 @@ shell: .stamp/bread-26.04-$(SELECTED_ARCH)  ## Drop into a bread:26.04 shell (ho
 		bread:26.04-$(SELECTED_ARCH) bash
 
 .PHONY: nuke-spread
-nuke-spread:  ## Kill stray spread processes + force-remove bread containers
+nuke-spread:  ## Kill stray spread processes + force-remove bread containers (docker + lxd)
 	-pkill spread
 	-$(DOCKER) ps -aq --filter label=spread-bread | xargs -r $(DOCKER) rm --force
 	-$(DOCKER) ps -aq --filter name='^bread-' | xargs -r $(DOCKER) rm --force
+	-command -v lxc >/dev/null && lxc list --format csv -c n user.spread-bread=true | xargs -r -n1 lxc delete --force
 
 .PHONY: clean
 clean:  ## Remove built images, stamps, generated inlined yamls, cached binaries
