@@ -43,10 +43,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
 
       - name: Restore cached binaries + stamp
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        uses: actions/download-artifact@v8.0.2
         with:
           name: binaries-${{ matrix.arch }}
           path: .
@@ -59,7 +59,7 @@ jobs:
       # Miss -> build and the cache auto-saves at job end.
       - name: Restore image tarball cache
         id: images-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache@v6.1.0
         with:
           path: images-out/
           key: images-${{ matrix.arch }}-${{ steps.inputs.outputs.hash }}
@@ -93,7 +93,7 @@ jobs:
       # Needed without a build too: the login check below runs the images.
       - name: Set up qemu (emulated arches only)
         if: matrix.qemu
-        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        uses: docker/setup-qemu-action@v4.4.0
 
       - name: Build + save ${{ matrix.arch }} images
         if: steps.images-cache.outputs.cache-hit != 'true' && steps.images-reuse.outputs.hit != 'true'
@@ -150,7 +150,7 @@ jobs:
 
       - name: Upload ${{ matrix.arch }} LXD images
         if: matrix.lxd
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: lxd-${{ matrix.arch }}
           path: lxd-out/
@@ -158,20 +158,20 @@ jobs:
           compression-level: 0
 
       - name: Upload ${{ matrix.arch }} image tarballs
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: images-${{ matrix.arch }}
           path: images-out/
 
       - name: Upload ${{ matrix.arch }} image digests
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: image-digests-${{ matrix.arch }}
           path: images-out/digests.json
 
       # Last, so a marker always has its tarballs. See the fetch step above.
       - name: Upload ${{ matrix.arch }} prebuilt marker
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: prebuilt-${{ matrix.arch }}-${{ steps.inputs.outputs.hash }}
           path: images-out/digests.json
