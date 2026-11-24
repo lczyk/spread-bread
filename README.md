@@ -88,7 +88,9 @@ spread lxd:
 spread lxd:ubuntu-26.04:tests/spread/integration/bash
 ```
 
-LXD only runs the host's arch, so the system is just `ubuntu-<ver>`, on an amd64 or arm64 host. no `--privileged`, no docker socket.
+LXD only runs the host's arch, so the system is just `ubuntu-<ver>`, on an amd64 or arm64 host.
+
+limitation: the container gets neither `--privileged` nor the host's docker socket, which the docker backend gives `bread-chisel-releases`. the `docker` cli in the image has no daemon to talk to, so tests that call it only run on the docker backend.
 
 the images are release assets next to the yamls: each is an LXD split image (`<flavour>-<ver>-<arch>.lxd-meta.tar.gz` + `.lxd-rootfs.tar.zst`) packed from the docker image by `hack/pack_lxd.sh`, plus its `.lxd-fingerprint`. allocate imports the image once per release (workers wait on a lock) and launches it by fingerprint; it drops the copies older releases left behind. `BREAD_LXD_URL` fetches them from elsewhere instead, e.g. a directory of `hack/pack_lxd.sh` output served over http.
 
@@ -213,7 +215,7 @@ it packs the host arch's images with `hack/pack_lxd.sh`, serves them over http t
 
 - builds the binary cache + all images -- amd64 / arm64 on per-arch native runners, the rest under qemu.
 - pushes 8 multiarch manifests to `ghcr.io/lczyk/spread-bread/{bread,bread-chisel-releases}:<ver>`.
-- attaches `inlined/*.yaml`, plus the LXD images of the native arches, to a rolling github release called `yamls`. older `r*` releases are deleted (release objects only; the underlying tags stay).
+- attaches `inlined/*.yaml`, plus the LXD images of the native arches, to a rolling github release called `downloads`. older `r*` releases are deleted (release objects only; the underlying tags stay).
 
 ci (`ci.yaml`) is build + test on every PR + push to main; no publish.
 

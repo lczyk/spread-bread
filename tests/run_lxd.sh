@@ -45,10 +45,21 @@ done
 
 python3 -m http.server --bind 127.0.0.1 --directory "$work/serve" "$port" >/dev/null 2>&1 &
 server=$!
+# Ask for one of the packs: something else may be answering on the port.
+probe="${flavours[0]}-${vers[0]}-$arch.lxd-fingerprint"
+serving=""
 for _ in $(seq 50); do
-    curl -fs -o /dev/null "http://127.0.0.1:$port/" && break
+    kill -0 "$server" 2>/dev/null || break
+    if [ "$(curl -fs "http://127.0.0.1:$port/$probe")" = "$(cat "$work/serve/$probe")" ]; then
+        serving=1
+        break
+    fi
     sleep 0.1
 done
+if [ -z "$serving" ]; then
+    echo "run_lxd: cannot serve the packs on 127.0.0.1:$port; set BREAD_LXD_TEST_PORT" >&2
+    exit 1
+fi
 
 failed=()
 for flavour in "${flavours[@]}"; do
@@ -71,9 +82,18 @@ for flavour in "${flavours[@]}"; do
         if ! (cd "$project" && BREAD_LXD_URL="http://127.0.0.1:$port" spread -v lxd:); then
             failed+=("$flavour-$ver")
         fi
+        fingerprint=$(cat "$work/serve/$flavour-$ver-$arch.lxd-fingerprint")
+        # spread only logs a failed discard, so look for what one left. The
+        # pack is this run's alone, which keeps other runs' instances out.
+        left=$(lxc list --format csv -c n,volatile.base_image user.spread-bread=true |
+            awk -F, -v f="$fingerprint" '$2 == f { print $1 }')
+        if [ -n "$left" ]; then
+            echo "discard left behind: ${left//$'\n'/ }" >&2
+            failed+=("$flavour-$ver (discard)")
+            echo "$left" | xargs -n1 lxc delete --force || true
+        fi
         # allocate imported the pack under its fingerprint: proof that
         # pack_lxd.sh computes the one LXD does.
-        fingerprint=$(cat "$work/serve/$flavour-$ver-$arch.lxd-fingerprint")
         if ! lxc image delete "$fingerprint"; then
             echo "no LXD image $fingerprint for $flavour-$ver-$arch" >&2
             failed+=("$flavour-$ver (fingerprint)")

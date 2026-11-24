@@ -144,8 +144,9 @@ $(FULL_BINARIES_STAMPS): .stamp/binaries-%: FORCE | .stamp
 arch_of = $(lastword $(subst -, ,$(1)))
 
 .SECONDEXPANSION:
-# bread copies in peel from the binaries; hash_inputs.rb keys its stamp on
-# peel's inputs alone, so other pin bumps leave bread as it is.
+# bread copies in peel from the binaries. hash_inputs.rb keys its stamp on
+# peel's inputs alone (PEEL_REF, the builder image, hack/build_binaries.sh),
+# so bumping another pin rebuilds the binaries but leaves bread as it is.
 $(FULL_BREAD_STAMPS): .stamp/bread-%: .stamp/binaries-$$(call arch_of,$$*) FORCE | .stamp
 	@hack/build_image.sh bread-$*
 

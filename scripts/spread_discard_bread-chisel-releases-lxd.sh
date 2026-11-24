@@ -4,9 +4,9 @@ set -e
 
 echo "Discarding instance for system: $SPREAD_SYSTEM_ADDRESS"
 
-# allocate labels its instances user.spread-bread=true; match ours by address.
-instance=$(lxc list --format csv -c n4 user.spread-bread=true |
-    awk -F, -v ip="$SPREAD_SYSTEM_ADDRESS" '{ split($2, a, " ") } a[1] == ip { print $1; exit }')
+# allocate records each instance's address in user.spread-bread-address.
+instance=$(lxc list --format csv -c n,user.spread-bread-address user.spread-bread=true |
+    awk -F, -v ip="$SPREAD_SYSTEM_ADDRESS" '$2 == ip { print $1; exit }')
 
 if [ -n "$instance" ]; then
     echo "Removing instance: $instance"

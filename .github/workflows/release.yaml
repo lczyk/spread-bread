@@ -75,7 +75,8 @@ jobs:
   publish-release:
     needs: [revision, build]
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # The LXD images are 20 rootfs tarballs to download and re-upload.
+    timeout-minutes: 20
     permissions:
       contents: write
       id-token: write
