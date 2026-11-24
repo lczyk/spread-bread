@@ -41,7 +41,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
 
       - name: Assert committed inlined yamls match templates + scripts
         run: |
@@ -75,7 +75,7 @@ jobs:
 
       - name: Checkout repository
         if: github.event_name == 'push'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
@@ -92,13 +92,33 @@ jobs:
             exit 1
           fi
 
+  # actions.lock pins every action to a commit, and each action a workflow
+  # uses has to be in it: run `gh actions-lock` after changing a uses: line.
+  # A PR doesn't run every workflow, so all of them are checked here.
+  check-actions-lock:
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install gh-actions-lock
+        run: gh extension install github/gh-actions-lock --pin v0.5.1
+
+      - name: Assert actions.lock matches the workflows
+        run: gh actions-lock --verify
+
   # The one check the main ruleset requires, so it doesn't have to list every
   # matrix job by name. always() makes a failed or cancelled dependency fail
   # this job; a skipped required check would count as passing. The only skip
   # is build on a PR-merge push, so skipped dependencies pass.
   ci-ok:
     if: always()
-    needs: [build, check-inlined, check-revision]
+    needs: [build, check-inlined, check-revision, check-actions-lock]
     runs-on: ubuntu-slim
     steps:
       - name: Assert every job succeeded
