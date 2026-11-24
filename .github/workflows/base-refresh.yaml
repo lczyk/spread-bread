@@ -17,7 +17,7 @@ name: Base refresh
 # GITHUB_TOKEN -- a real account's token, so the bump PR DOES trigger ci.yaml
 # (github only suppresses recursive runs for GITHUB_TOKEN). the bot is a
 # write collaborator; the classic PAT needs `repo` scope (or `public_repo`
-# if the repo is public).
+# if the repo is public), plus `workflow` for release.yaml's tag push.
 
 on:
   schedule:
