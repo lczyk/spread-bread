@@ -88,11 +88,13 @@ spread lxd:
 spread lxd:ubuntu-26.04:tests/spread/integration/bash
 ```
 
-LXD only runs the host's arch, so the system is just `ubuntu-<ver>`, on an amd64 or arm64 host.
+LXD only runs its own arch, so the system is just `ubuntu-<ver>`, on an amd64 or arm64 LXD server.
+
+the server is whatever `lxc` points at, so a remote works the same as a local one (`lxc remote switch <name>`), including from macOS, where there is only the client. the remote has to be added by name or IPv4 address. spread reaches each container's sshd through a port LXD forwards on the server (a proxy device, ports 20000-29999): on loopback for a local LXD, on all the server's interfaces for a remote one. the containers take the yaml's password, so only point this at a remote on a network you trust.
 
 limitation: the container gets neither `--privileged` nor the host's docker socket, which the docker backend gives `bread-chisel-releases`. the `docker` cli in the image has no daemon to talk to, so tests that call it only run on the docker backend.
 
-the images are release assets next to the yamls: each is an LXD split image (`<flavour>-<ver>-<arch>.lxd-meta.tar.gz` + `.lxd-rootfs.tar.zst`) packed from the docker image by `hack/pack_lxd.sh`, plus its `.lxd-fingerprint`. allocate imports the image once per release (workers wait on a lock) and launches it by fingerprint; it drops the copies older releases left behind. `BREAD_LXD_URL` fetches them from elsewhere instead, e.g. a directory of `hack/pack_lxd.sh` output served over http.
+the images are release assets next to the yamls: each is an LXD split image (`<flavour>-<ver>-<arch>.lxd-meta.tar.gz` + `.lxd-rootfs.tar.zst`) packed from the docker image by `hack/pack_lxd.sh`, plus its `.lxd-fingerprint`. allocate imports the image once per release (workers wait on a lock, where the host has `flock`) and launches it by fingerprint; it drops the copies older releases left behind. `BREAD_LXD_URL` fetches them from elsewhere instead, e.g. a directory of `hack/pack_lxd.sh` output served over http.
 
 peel is the container's init: it brings up `eth0` over DHCP, writes `resolv.conf` and runs the image's `CMD` (sshd), as recorded in `/peel/state.json` at pack time. it never pulls anything: state.json marks the image as already unpacked.
 

@@ -38,7 +38,7 @@ backends:
           password: bread
           workers: 2
 
-  # Opt-in (`spread lxd:`): the same image as an LXD container. Host arch only.
+  # Opt-in (`spread lxd:`): the same image as an LXD container, local or remote.
   lxd:
     type: adhoc
     manual: true
