@@ -60,13 +60,14 @@ docker image inspect --format \
     "$image" > "$work/extra/peel/state.json"
 
 # docker export takes a container, not an image; this one never starts.
+# The files docker bind-mounts at runtime are empty placeholders in the export,
+# dropped on the way through: LXD's templates write /etc/hostname + /etc/hosts,
+# peel /etc/resolv.conf. Deleting in place corrupts the archive with the tar
+# of ubuntu 24.04.
 cid=$(docker create --platform "$(hack/build_config.rb --platform "$arch")" "$image")
-docker export "$cid" -o "$work/rootfs.tar"
+docker export "$cid" |
+    tar --delete -f - .dockerenv etc/hostname etc/hosts etc/resolv.conf > "$work/rootfs.tar"
 docker rm "$cid" >/dev/null
-
-# Docker bind-mounts these at runtime; the export only has empty placeholders.
-# LXD's templates write /etc/hostname + /etc/hosts, peel /etc/resolv.conf.
-tar --delete -f "$work/rootfs.tar" .dockerenv etc/hostname etc/hosts etc/resolv.conf
 tar --append -f "$work/rootfs.tar" --owner=0 --group=0 --numeric-owner -C "$work/extra" peel
 zstd -q -T0 -f "$work/rootfs.tar" -o "$out/$name.lxd-rootfs.tar.zst"
 
