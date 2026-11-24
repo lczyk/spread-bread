@@ -1,4 +1,4 @@
-# Bread image: Ubuntu 26.10 + sshd only.
+# Bread image: Ubuntu 26.10 + sshd only (+ peel, to boot it under LXD).
 
 FROM docker.io/library/ubuntu:26.10@sha256:b5194b8e58989da0865ebc80078bf9f5f8742ec6a867c53f6ae699f6036756f7 AS base
 
@@ -72,6 +72,11 @@ RUN --mount=type=bind,source=images/files/seccomp-shim.c,target=/src/seccomp-shi
 
 FROM base
 COPY --from=seccomp-shim /seccomp-shim.so /usr/local/lib/bread-seccomp-shim.so
+
+# peel, the init LXD boots the image with (/sbin -> usr/sbin): DHCP on eth0,
+# then the CMD below, as hack/pack_lxd.sh records it. Docker never runs it.
+ARG BUILD_ARCH=amd64
+COPY --chmod=0755 cache/binaries/peel-${BUILD_ARCH} /usr/sbin/init
 
 EXPOSE 22
 # -e: log to stderr, i.e. to `docker logs`; the container has no syslog.

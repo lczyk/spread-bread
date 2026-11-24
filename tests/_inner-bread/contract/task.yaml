@@ -4,6 +4,7 @@ execute: |
   set -e
 
   expected_ver=$(echo "$SPREAD_SYSTEM" | cut -d- -f2)
+  # LXD systems carry no arch (ubuntu-<ver>): LXD only runs the host's.
   expected_arch=$(echo "$SPREAD_SYSTEM" | cut -d- -f3)
 
   # /etc/os-release VERSION_ID matches expected ubuntu version.
@@ -20,10 +21,16 @@ execute: |
       armv7l)  actual_arch=armhf ;;
       *)       actual_arch=$(uname -m) ;;
   esac
-  if [ "$expected_arch" != "$actual_arch" ]; then
+  if [ -n "$expected_arch" ] && [ "$expected_arch" != "$actual_arch" ]; then
       echo "arch mismatch: expected=$expected_arch got=$actual_arch"
       exit 1
   fi
+
+  # peel, the init the image boots with under LXD.
+  test -x /usr/sbin/init || {
+      echo "missing /usr/sbin/init (peel)"
+      exit 1
+  }
 
   # bread-warning: file present + prints exactly once on a forced login shell.
   test -r /etc/profile.d/00-bread-warning.sh || {

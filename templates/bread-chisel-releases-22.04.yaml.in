@@ -47,6 +47,17 @@ backends:
           password: bread
           workers: 4
 
+  # Opt-in (`spread lxd:`): the same image as an LXD container, local or remote.
+  lxd:
+    type: adhoc
+    manual: true
+    allocate: source scripts/spread_allocate_bread-chisel-releases-lxd.sh
+    discard: source scripts/spread_discard_bread-chisel-releases-lxd.sh
+    systems:
+      - ubuntu-22.04:
+          password: bread
+          workers: 4
+
 # One instance serves every task of a run, so rootfs'es have to go as they finish.
 restore-each: clean-rootfs
 

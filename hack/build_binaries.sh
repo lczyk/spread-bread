@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# Cross-compile chisel + spread + docker cli for the target arches inside a
-# single Canonical ubuntu/go:1.25-26.04_edge container. Output binaries land
-# in ./cache/binaries/{chisel,chisel-hacked,spread,docker}-<arch>.
+# Cross-compile chisel + spread + docker cli + peel for the target arches
+# inside a single Canonical ubuntu/go:1.25-26.04_edge container. Output
+# binaries land in ./cache/binaries/{chisel,chisel-hacked,spread,docker,peel}-<arch>.
 #
 # Required env vars (set by makefile):
 #   CHISEL_REF        git ref (tag, branch, or SHA) for canonical/chisel
 #   SPREAD_REF        git ref for canonical/spread
 #   GO_BUILDER_IMAGE  builder image tag
 #   DOCKER_VERSION    docker/cli tag, without the leading v
+#   PEEL_REF          git ref for canonical/peel
 # Optional:
-#   TARGET_ARCHES     space-separated GOARCH list (default: all four)
+#   TARGET_ARCHES     space-separated GOARCH list (default: all six)
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -18,6 +19,7 @@ cd "$(dirname "$0")/.."
 : "${SPREAD_REF:?required}"
 : "${GO_BUILDER_IMAGE:?required}"
 : "${DOCKER_VERSION:?required}"
+: "${PEEL_REF:?required}"
 TARGET_ARCHES="${TARGET_ARCHES:-amd64 arm64 s390x ppc64le riscv64 armhf}"
 
 mkdir -p cache/binaries
@@ -32,6 +34,7 @@ docker run --rm \
     -e CHISEL_REF="$CHISEL_REF" \
     -e SPREAD_REF="$SPREAD_REF" \
     -e DOCKER_VERSION="$DOCKER_VERSION" \
+    -e PEEL_REF="$PEEL_REF" \
     -e TARGET_ARCHES="$TARGET_ARCHES" \
     -e HUID="$HUID" \
     -e HGID="$HGID" \
@@ -117,6 +120,10 @@ done
 cd /
 
 build spread https://github.com/canonical/spread  "$SPREAD_REF" ./cmd/spread
+
+# peel: the init (PID 1) the bread images boot with under LXD. Docker never
+# runs it. Upstream publishes no armhf build, so build it like the rest.
+build peel https://github.com/canonical/peel "$PEEL_REF" ./cmd/peel
 
 # Build the docker CLI from source for each target arch. docker.com'\''s
 # static tarballs only cover x86_64 / aarch64 at current versions (s390x /

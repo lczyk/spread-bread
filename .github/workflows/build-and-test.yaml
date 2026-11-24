@@ -2,7 +2,8 @@ name: Build and Test
 
 # Reusable. Per-arch native runner builds all bread / bread-chisel-releases /
 # bread-test images for its arch (no qemu, no cross-arch matrix entry per
-# runner) and then runs spread-in-spread tests scoped to the same arch.
+# runner) and then runs spread-in-spread tests scoped to the same arch, and
+# the same contract on LXD (tests/run_lxd.sh).
 
 on:
   workflow_call:
@@ -21,7 +22,7 @@ jobs:
           - runner: ubuntu-24.04-arm
             arch: arm64
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       APT_MIRROR: http://azure.archive.ubuntu.com/ubuntu/
 
@@ -47,3 +48,12 @@ jobs:
       - name: Run spread-in-spread tests (${{ matrix.arch }} outer only)
         working-directory: tests
         run: spread "outer:ubuntu-26.04-${{ matrix.arch }}"
+
+      # chisel-releases runs its LXD backend on 5.21; match it.
+      - name: Set up LXD
+        uses: canonical/setup-lxd@a3c85fc6fb7fff43fcfeae87659e41a8f635b7dd # v0.1.3
+        with:
+          channel: 5.21/stable
+
+      - name: Run LXD contract tests (${{ matrix.arch }})
+        run: make test-lxd

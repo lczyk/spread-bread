@@ -4,6 +4,7 @@ execute: |
   set -e
 
   expected_ver=$(echo "$SPREAD_SYSTEM" | cut -d- -f2)
+  # LXD systems carry no arch (ubuntu-<ver>): LXD only runs the host's.
   expected_arch=$(echo "$SPREAD_SYSTEM" | cut -d- -f3)
 
   actual_ver=$(. /etc/os-release && echo "$VERSION_ID")
@@ -18,7 +19,7 @@ execute: |
       armv7l)  actual_arch=armhf ;;
       *)       actual_arch=$(uname -m) ;;
   esac
-  if [ "$expected_arch" != "$actual_arch" ]; then
+  if [ -n "$expected_arch" ] && [ "$expected_arch" != "$actual_arch" ]; then
       echo "arch mismatch: expected=$expected_arch got=$actual_arch"
       exit 1
   fi
